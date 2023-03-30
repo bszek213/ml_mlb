@@ -5,6 +5,8 @@ __pycache__/
 # key file
 key.txt
 errors.log
+#log files
+logs/
 #Compression
 randomForestModelTuned.pkl
 randomForestModelTuned.joblib

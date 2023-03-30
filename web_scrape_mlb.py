@@ -342,4 +342,4 @@ def get_data_team(team,year):
                       'rank':rank,
                       "cli":cli
     })
-get_data_team('NYY',2022)
+# get_data_team('NYY',2022)
