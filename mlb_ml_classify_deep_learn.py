@@ -95,15 +95,14 @@ class mlbDeep():
         print(f'Columns dropped  >= 0.90: {to_drop}')
         #Drop samples that are outliers 
         print(f'old feature dataframe shape before outlier removal: {self.x_no_corr.shape}')
-        Q1 = np.percentile(self.x_no_corr, 25, axis=0)
-        Q3 = np.percentile(self.x_no_corr, 75, axis=0)
-        IQR = Q3 - Q1
-        is_outlier = (self.x_no_corr < (Q1 - 20 * IQR)) | (self.x_no_corr > (Q3 + 20 * IQR))
-        is_outlier = is_outlier.any(axis=1)
-        not_outliers = ~is_outlier
-        self.x_no_corr = self.x_no_corr[not_outliers]
-        self.y = self.y[not_outliers]
-        # self.x_no_corr.drop(columns=to_drop, inplace=True)
+        # Q1 = np.percentile(self.x_no_corr, 25, axis=0)
+        # Q3 = np.percentile(self.x_no_corr, 75, axis=0)
+        # IQR = Q3 - Q1
+        # is_outlier = (self.x_no_corr < (Q1 - 20 * IQR)) | (self.x_no_corr > (Q3 + 20 * IQR))
+        # is_outlier = is_outlier.any(axis=1)
+        # not_outliers = ~is_outlier
+        # self.x_no_corr = self.x_no_corr[not_outliers]
+        # self.y = self.y[not_outliers]
         print(f'new feature dataframe shape after outlier removal: {self.x_no_corr.shape}')
 
     def split(self):
@@ -168,14 +167,14 @@ class mlbDeep():
             early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
             self.model.fit(self.x_train,self.y_train,epochs=500, batch_size=64, verbose=0,
                                     validation_data=(self.x_test,self.y_test),callbacks=[tensorboard_callback]) 
+            self.model.save('deep_learning_mlb_class.h5')
     def predict_two_teams(self):
-        teams_sports_ref = read_csv('teams_sports_ref_format.csv')
         while True:
                 print(f'ALL TEAMS: {self.teams_abv}')
-                team_1 = input('team_1: ')
-                if team_1 == 'exit':
+                team_1 = input('team_1: ').upper()
+                if team_1 == 'EXIT':
                     break
-                team_2 = input('team_2: ')
+                team_2 = input('team_2: ').upper()
                 #Game location
                 game_loc_team1 = int(input(f'{team_1} : #Away = 0, Home = 1: '))
                 if game_loc_team1 == 0:
@@ -183,7 +182,7 @@ class mlbDeep():
                 elif game_loc_team1 == 1:
                     game_loc_team2 = 0
                 #2023 data
-                year = 2023
+                year = 2022
                 team_1_df2023 = web_scrape_mlb.get_data_team(team_1,year)
                 sleep(4)
                 team_2_df2023 = web_scrape_mlb.get_data_team(team_2,year)
@@ -193,16 +192,50 @@ class mlbDeep():
                 #Drop the correlated features
                 team_1_df2023.drop(columns=self.drop_cols, inplace=True)
                 team_2_df2023.drop(columns=self.drop_cols, inplace=True)
+                #convert to float
+                for col in team_1_df2023.columns:
+                    team_1_df2023[col].replace('', np.nan, inplace=True)
+                    team_2_df2023[col].replace('', np.nan, inplace=True)
+                    team_1_df2023[col] = team_1_df2023[col].astype(float)
+                    team_2_df2023[col] = team_2_df2023[col].astype(float)
+                team_1_df2023.dropna(inplace=True)
+                team_2_df2023.dropna(inplace=True)
                 ma_range = np.arange(2,5,1)
+                print(team_1_df2023)
+                #avoid dropping column issue
+                data1_mean = DataFrame()
+                data2_mean = DataFrame()
+                team_1_pred = []
+                team_2_pred = []
                 for ma in tqdm(ma_range):
-                    data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
-                    data1_mean['game_loc'] = game_loc_team1
-                    data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
-                    data2_mean['game_loc'] = game_loc_team2
+                    for cols in team_1_df2023.columns:
+                        # ['cli', 'inherited_runners', 'inherited_score']
+                        if "cli" not in cols or "inherited_runners" not in cols or "inherited_score" not in cols:
+                            # data1_mean[cols] = team_1_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
+                            # data2_mean[cols] = team_2_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
+                            data1_mean[cols] = team_1_df2023[cols].rolling(ma,min_periods=ma-1).median()
+                            data2_mean[cols] = team_2_df2023[cols].rolling(ma,min_periods=ma-1).median()
+                        else:
+                            data1_mean[cols] = team_1_df2023[cols]
+                            data2_mean[cols] = team_2_df2023[cols]
+                    # data1_mean = team_1_df2023.dropna().rolling(ma,min_periods=ma-1).median()
+                    # data2_mean = team_2_df2023.dropna().rolling(ma,min_periods=ma-1).median()
+                    data1_mean['game_location'] = game_loc_team1
+                    data2_mean['game_location'] = game_loc_team2
+                    #TEAM 1 Prediction
+                    x_new = self.scaler.transform(data1_mean.iloc[-1:])
+                    x_new2 = self.scaler.transform(data2_mean.iloc[-1:])
+                    prediction = self.model.predict(x_new)
+                    prediction2 = self.model.predict(x_new2)
+                    team_1_pred.append(prediction[0][0]*100)
+                    team_2_pred.append(prediction2[0][0]*100)
+                print(f'prediction {team_1}: {team_1_pred}%')
+                print(f'prediction {team_2}: {team_2_pred}%')
     def run_analysis(self):
         self.get_teams()
         self.split()
         self.deep_learn()
+        self.predict_two_teams()
 def main():
     mlbDeep().run_analysis()
 if __name__ == '__main__':
