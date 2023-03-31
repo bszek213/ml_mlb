@@ -181,7 +181,7 @@ class mlbDeep():
             self.model.save('deep_learning_mlb_class.h5')
     def predict_two_teams(self):
         while True:
-                print(f'ALL TEAMS: {self.teams_abv}')
+                print(f'ALL TEAMS: {sorted(self.teams_abv)}')
                 team_1 = input('team_1: ').upper()
                 if team_1 == 'EXIT':
                     break
@@ -252,6 +252,8 @@ class mlbDeep():
                 print(f'prediction {team_1}: {team_1_pred}%')
                 print(f'prediction {team_2}: {team_2_pred}%')
                 print('====================================')
+                if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
+                    print('Game will be close.')
                 if sum(team_1_pred) > sum(team_2_pred):
                     print(f'{team_1} wins')
                 elif sum(team_1_pred) < sum(team_2_pred):
