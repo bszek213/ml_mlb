@@ -25,6 +25,8 @@ from keras.callbacks import TensorBoard, EarlyStopping
 # from datetime import datetime, timedelta
 # from sklearn.metrics import roc_curve
 import seaborn as sns
+from sklearn.decomposition import PCA
+
 
 class mlbDeep():
     def __init__(self):
@@ -118,11 +120,20 @@ class mlbDeep():
         real_values = ~self.x_no_corr.isna().any(axis=1)
         self.x_no_corr.dropna(inplace=True)
         self.y = self.y.loc[real_values]
+        #StandardScaler
+        self.scaler = StandardScaler()
+        X_std = self.scaler.fit_transform(self.x_no_corr)
+        #PCA data down to 95% explained variance
+        self.pca = PCA(n_components=0.95)
+        X_pca = self.pca.fit_transform(X_std)
+        # Check the number of components that were retained
+        print('Number of components:', self.pca.n_components_)
+        self.x_no_corr = DataFrame(X_pca, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_no_corr, self.y, train_size=0.8)
         # normalize data
-        self.scaler = StandardScaler()
-        self.x_train = self.scaler.fit_transform(self.x_train)
-        self.x_test = self.scaler.transform(self.x_test)
+        # self.scaler = StandardScaler()
+        # self.x_train = self.scaler.transform(self.x_train)
+        # self.x_test = self.scaler.transform(self.x_test)
     def deep_learn(self):
         if exists('deep_learning_mlb_class.h5'):
             self.model = keras.models.load_model('deep_learning_mlb_class.h5')
@@ -200,37 +211,52 @@ class mlbDeep():
                     team_2_df2023[col] = team_2_df2023[col].astype(float)
                 team_1_df2023.dropna(inplace=True)
                 team_2_df2023.dropna(inplace=True)
+                #PCA and standardize
+                X_std_1 = self.scaler.transform(team_1_df2023)
+                X_std_2 = self.scaler.transform(team_2_df2023) 
+                X_pca_1 = self.pca.transform(X_std_1)
+                X_pca_2 = self.pca.transform(X_std_2)
+                team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
                 ma_range = np.arange(2,5,1)
-                print(team_1_df2023)
+                # print(team_1_df2023)
                 #avoid dropping column issue
                 data1_mean = DataFrame()
                 data2_mean = DataFrame()
                 team_1_pred = []
                 team_2_pred = []
                 for ma in tqdm(ma_range):
-                    for cols in team_1_df2023.columns:
-                        # ['cli', 'inherited_runners', 'inherited_score']
-                        if "cli" not in cols or "inherited_runners" not in cols or "inherited_score" not in cols:
-                            # data1_mean[cols] = team_1_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
-                            # data2_mean[cols] = team_2_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
-                            data1_mean[cols] = team_1_df2023[cols].rolling(ma,min_periods=ma-1).median()
-                            data2_mean[cols] = team_2_df2023[cols].rolling(ma,min_periods=ma-1).median()
-                        else:
-                            data1_mean[cols] = team_1_df2023[cols]
-                            data2_mean[cols] = team_2_df2023[cols]
+                    data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                    data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                    # for cols in team_1_df2023.columns:
+                        # # ['cli', 'inherited_runners', 'inherited_score']
+                        # if "cli" not in cols or "inherited_runners" not in cols or "inherited_score" not in cols:
+                        #     # data1_mean[cols] = team_1_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
+                        #     # data2_mean[cols] = team_2_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
+                        #     data1_mean[cols] = team_1_df2023[cols].rolling(ma,min_periods=ma-1).median()
+                        #     data2_mean[cols] = team_2_df2023[cols].rolling(ma,min_periods=ma-1).median()
+                        # else:
+                        #     data1_mean[cols] = team_1_df2023[cols]
+                        #     data2_mean[cols] = team_2_df2023[cols]
                     # data1_mean = team_1_df2023.dropna().rolling(ma,min_periods=ma-1).median()
                     # data2_mean = team_2_df2023.dropna().rolling(ma,min_periods=ma-1).median()
-                    data1_mean['game_location'] = game_loc_team1
-                    data2_mean['game_location'] = game_loc_team2
+                    # data1_mean['game_location'] = game_loc_team1
+                    # data2_mean['game_location'] = game_loc_team2
                     #TEAM 1 Prediction
-                    x_new = self.scaler.transform(data1_mean.iloc[-1:])
-                    x_new2 = self.scaler.transform(data2_mean.iloc[-1:])
-                    prediction = self.model.predict(x_new)
-                    prediction2 = self.model.predict(x_new2)
+                    # x_new = self.scaler.transform(data1_mean.iloc[-1:])
+                    # x_new2 = self.scaler.transform(data2_mean.iloc[-1:])
+                    prediction = self.model.predict(data1_mean.iloc[-1:])
+                    prediction2 = self.model.predict(data2_mean.iloc[-1:])
                     team_1_pred.append(prediction[0][0]*100)
                     team_2_pred.append(prediction2[0][0]*100)
                 print(f'prediction {team_1}: {team_1_pred}%')
                 print(f'prediction {team_2}: {team_2_pred}%')
+                print('====================================')
+                if sum(team_1_pred) > sum(team_2_pred):
+                    print(f'{team_1} wins')
+                elif sum(team_1_pred) < sum(team_2_pred):
+                    print(f'{team_2} wins')
+                print('====================================')
     def run_analysis(self):
         self.get_teams()
         self.split()
