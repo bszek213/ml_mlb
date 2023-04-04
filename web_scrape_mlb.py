@@ -340,6 +340,6 @@ def get_data_team(team,year):
                       "pitchers_number":pitchers_number,
                       "game_location":team_homeORaway,
                       'rank':rank,
-                      "cli":cli
+                    #   "cli":cli
     })
 # get_data_team('NYY',2022)

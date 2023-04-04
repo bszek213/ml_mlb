@@ -80,6 +80,7 @@ class mlbDeep():
         self.all_data = read_csv(join(getcwd(),'all_data_regressor.csv'))
         print('len data: ', len(self.all_data))
         self.all_data = self.all_data.drop_duplicates(keep='last')
+        self.all_data.drop(columns='cli',inplace=True)
         print(f'length of data after duplicates are dropped: {len(self.all_data)}')
     
     def convert_to_float(self):
@@ -193,7 +194,7 @@ class mlbDeep():
                 elif game_loc_team1 == 1:
                     game_loc_team2 = 0
                 #2023 data
-                year = 2022
+                year = 2023
                 team_1_df2023 = web_scrape_mlb.get_data_team(team_1,year)
                 sleep(4)
                 team_2_df2023 = web_scrape_mlb.get_data_team(team_2,year)
