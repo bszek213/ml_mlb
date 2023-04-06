@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
+from keras import regularizers
 from sklearn.preprocessing import StandardScaler
 import web_scrape_mlb
 from os import getcwd
@@ -39,7 +40,7 @@ class mlbDeep():
         #     self.RandForRegressor=joblib.load("./randomForestModelTuned.joblib")
     def get_teams(self):
         year_list_find = []
-        year_list = [2018,2019,2020,2021,2022] #,2023
+        year_list = [2018,2019,2020,2021,2022,2023] #
         if exists(join(getcwd(),'year_count.yaml')):
             with open(join(getcwd(),'year_count.yaml')) as file:
                 year_counts = yaml.load(file, Loader=yaml.FullLoader)
@@ -142,7 +143,8 @@ class mlbDeep():
             #best params
             # Best: 0.999925 using {'alpha': 0.1, 'batch_size': 32, 'dropout_rate': 0.2,
             #  'learning_rate': 0.001, 'neurons': 16}
-            optimizer = keras.optimizers.Adam(learning_rate=0.001)
+            optimizer = keras.optimizers.Adam(learning_rate=0.001,
+                                              kernel_regularizer=regularizers.l2(0.001))
             self.model = keras.Sequential([
                     layers.Dense(16, input_shape=(self.x_no_corr.shape[1],)),
                     layers.LeakyReLU(alpha=0.1),
