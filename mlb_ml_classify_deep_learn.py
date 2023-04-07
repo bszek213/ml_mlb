@@ -96,14 +96,14 @@ class mlbDeep():
         range_ma = [2,3,4]
         temp_ma = DataFrame()
         for val in range_ma:
-            for col in self.all_data.columns:
+            for col in self.x_ma.columns:
                 if 'game_result' in col or 'game_location' in col:
                     continue
                     # temp_ma[col] = self.all_data[col]
                 else:
                     dynamic_name = col + '_' + str(val)
-                    temp_ma[dynamic_name] = self.all_data[col].ewm(span=val,min_periods=0).mean()
-        self.all_data = concat([self.all_data, temp_ma], axis=1)
+                    temp_ma[dynamic_name] = self.x_ma[col].ewm(span=val,min_periods=0).mean()
+        self.x_ma = concat([self.x_ma, temp_ma], axis=1)
 
     def pre_process(self):
         # Remove features with a correlation coef greater than 0.85
@@ -155,6 +155,24 @@ class mlbDeep():
         # self.scaler = StandardScaler()
         # self.x_train = self.scaler.transform(self.x_train)
         # self.x_test = self.scaler.transform(self.x_test)
+    def split_ma(self):
+        self.convert_to_float()
+        self.y_ma = self.all_data['game_result'].astype(int)
+        self.x_ma = self.all_data.drop(columns=['game_result'])
+        self.feature_engineering()
+        #Dropna and remove all data from subsequent y data
+        real_values = ~self.x_ma.isna().any(axis=1)
+        self.x_ma.dropna(inplace=True)
+        self.y_ma = self.y_ma.loc[real_values]
+        #StandardScaler
+        self.scaler_ma = StandardScaler()
+        X_std = self.scaler_ma.fit_transform(self.x_ma)
+        #PCA data down to 95% explained variance
+        self.pca_ma = PCA(n_components=0.95)
+        X_pca_ma = self.pca_ma.fit_transform(X_std)
+        # Check the number of components that were retained
+        self.x_ma = DataFrame(X_pca_ma, columns=[f'PC{i}' for i in range(1, self.pca_ma.n_components_+1)])
+        self.x_train_ma, self.x_test_ma, self.y_train_ma, self.y_test_ma = train_test_split(self.x_ma, self.y_ma, train_size=0.8)
     def deep_learn(self):
         if exists('deep_learning_mlb_class.h5'):
             self.model = keras.models.load_model('deep_learning_mlb_class.h5')
@@ -202,86 +220,136 @@ class mlbDeep():
             self.model.fit(self.x_train,self.y_train,epochs=500, batch_size=64, verbose=0,
                                     validation_data=(self.x_test,self.y_test),callbacks=[tensorboard_callback]) 
             self.model.save('deep_learning_mlb_class.h5')
+    def deep_learn_ma(self):
+        if exists('deep_learning_ma_mlb_class.h5'):
+            self.model = keras.models.load_model('deep_learning_ma_mlb_class.h5')
+        else:
+            #best params
+            # Best: 0.999925 using {'alpha': 0.1, 'batch_size': 32, 'dropout_rate': 0.2,
+            #  'learning_rate': 0.001, 'neurons': 16}
+            optimizer = keras.optimizers.Adam(learning_rate=0.001,
+                                            #   kernel_regularizer=regularizers.l2(0.001)
+                                              )
+            self.x_train_ma, self.x_test_ma, self.y_train_ma, self.y_test_ma
+            self.model = keras.Sequential([
+                    layers.Dense(16, input_shape=(self.x_train_ma.shape[1],)),
+                    layers.LeakyReLU(alpha=0.1),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(16),
+                    layers.LeakyReLU(alpha=0.1),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(16),
+                    layers.LeakyReLU(alpha=0.1),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(16),
+                    layers.LeakyReLU(alpha=0.1),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(16),
+                    layers.LeakyReLU(alpha=0.1),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(16),
+                    layers.LeakyReLU(alpha=0.1),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(1, activation='sigmoid')
+                ])
+            self.model.compile(optimizer=optimizer,
+                loss='binary_crossentropy',
+                metrics=['accuracy'])
+            self.model.summary()
+            print('Number of components Moving Average:', self.pca_ma.n_components_)
+            print('Number of components:', self.pca.n_components_)
+            #run this to see the tensorBoard: tensorboard --logdir=./logs
+            tensorboard_callback = TensorBoard(log_dir="./logs")
+            early_stop = EarlyStopping(monitor='val_loss', patience=50, mode='min', verbose=1)
+            self.model.fit(self.x_train_ma,self.y_train_ma,epochs=500, batch_size=64, verbose=0,
+                                    validation_data=(self.x_test_ma,self.y_test_ma),callbacks=[tensorboard_callback]) 
+            self.model.save('deep_learning_ma_mlb_class.h5')
     def predict_two_teams(self):
         while True:
-                print(f'ALL TEAMS: {sorted(self.teams_abv)}')
-                team_1 = input('team_1: ').upper()
-                if team_1 == 'EXIT':
-                    break
-                team_2 = input('team_2: ').upper()
-                #Game location
-                game_loc_team1 = int(input(f'{team_1} : #Away = 0, Home = 1: '))
-                if game_loc_team1 == 0:
-                    game_loc_team2 = 1
-                elif game_loc_team1 == 1:
-                    game_loc_team2 = 0
-                #2023 data
-                year = 2023
-                team_1_df2023 = web_scrape_mlb.get_data_team(team_1,year)
-                sleep(4)
-                team_2_df2023 = web_scrape_mlb.get_data_team(team_2,year)
-                #Remove Game Result
-                team_1_df2023.drop(columns=['game_result'],inplace=True)
-                team_2_df2023.drop(columns=['game_result'],inplace=True)
-                #Drop the correlated features
-                # team_1_df2023.drop(columns=self.drop_cols, inplace=True)
-                # team_2_df2023.drop(columns=self.drop_cols, inplace=True)
-                #convert to float
-                for col in team_1_df2023.columns:
-                    team_1_df2023[col].replace('', np.nan, inplace=True)
-                    team_2_df2023[col].replace('', np.nan, inplace=True)
-                    team_1_df2023[col] = team_1_df2023[col].astype(float)
-                    team_2_df2023[col] = team_2_df2023[col].astype(float)
-                team_1_df2023.dropna(inplace=True)
-                team_2_df2023.dropna(inplace=True)
-                #PCA and standardize
-                X_std_1 = self.scaler.transform(team_1_df2023)
-                X_std_2 = self.scaler.transform(team_2_df2023) 
-                X_pca_1 = self.pca.transform(X_std_1)
-                X_pca_2 = self.pca.transform(X_std_2)
-                team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-                team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-                ma_range = np.arange(2,5,1)
-                # print(team_1_df2023)
-                #avoid dropping column issue
-                data1_mean = DataFrame()
-                data2_mean = DataFrame()
-                team_1_pred = []
-                team_2_pred = []
-                for ma in tqdm(ma_range):
-                    data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
-                    data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
-                    # for cols in team_1_df2023.columns:
-                        # # ['cli', 'inherited_runners', 'inherited_score']
-                        # if "cli" not in cols or "inherited_runners" not in cols or "inherited_score" not in cols:
-                        #     # data1_mean[cols] = team_1_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
-                        #     # data2_mean[cols] = team_2_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
-                        #     data1_mean[cols] = team_1_df2023[cols].rolling(ma,min_periods=ma-1).median()
-                        #     data2_mean[cols] = team_2_df2023[cols].rolling(ma,min_periods=ma-1).median()
-                        # else:
-                        #     data1_mean[cols] = team_1_df2023[cols]
-                        #     data2_mean[cols] = team_2_df2023[cols]
-                    # data1_mean = team_1_df2023.dropna().rolling(ma,min_periods=ma-1).median()
-                    # data2_mean = team_2_df2023.dropna().rolling(ma,min_periods=ma-1).median()
-                    # data1_mean['game_location'] = game_loc_team1
-                    # data2_mean['game_location'] = game_loc_team2
-                    #TEAM 1 Prediction
-                    # x_new = self.scaler.transform(data1_mean.iloc[-1:])
-                    # x_new2 = self.scaler.transform(data2_mean.iloc[-1:])
-                    prediction = self.model.predict(data1_mean.iloc[-1:])
-                    prediction2 = self.model.predict(data2_mean.iloc[-1:])
-                    team_1_pred.append(prediction[0][0]*100)
-                    team_2_pred.append(prediction2[0][0]*100)
-                print(f'prediction {team_1}: {team_1_pred}%')
-                print(f'prediction {team_2}: {team_2_pred}%')
-                print('====================================')
-                if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
-                    print('Game will be close.')
-                if sum(team_1_pred) > sum(team_2_pred):
-                    print(f'{team_1} wins')
-                elif sum(team_1_pred) < sum(team_2_pred):
-                    print(f'{team_2} wins')
-                print('====================================')
+            print(f'ALL TEAMS: {sorted(self.teams_abv)}')
+            team_1 = input('team_1: ').upper()
+            if team_1 == 'EXIT':
+                break
+            team_2 = input('team_2: ').upper()
+            #Game location
+            game_loc_team1 = int(input(f'{team_1} : #Away = 0, Home = 1: '))
+            if game_loc_team1 == 0:
+                game_loc_team2 = 1
+            elif game_loc_team1 == 1:
+                game_loc_team2 = 0
+            #2023 data
+            year = 2023
+            team_1_df2023 = web_scrape_mlb.get_data_team(team_1,year)
+            sleep(4)
+            team_2_df2023 = web_scrape_mlb.get_data_team(team_2,year)
+            #Remove Game Result
+            team_1_df2023.drop(columns=['game_result'],inplace=True)
+            team_2_df2023.drop(columns=['game_result'],inplace=True)
+            #Drop the correlated features
+            # team_1_df2023.drop(columns=self.drop_cols, inplace=True)
+            # team_2_df2023.drop(columns=self.drop_cols, inplace=True)
+            #convert to float
+            for col in team_1_df2023.columns:
+                team_1_df2023[col].replace('', np.nan, inplace=True)
+                team_2_df2023[col].replace('', np.nan, inplace=True)
+                team_1_df2023[col] = team_1_df2023[col].astype(float)
+                team_2_df2023[col] = team_2_df2023[col].astype(float)
+            team_1_df2023.dropna(inplace=True)
+            team_2_df2023.dropna(inplace=True)
+            #PCA and standardize
+            X_std_1 = self.scaler.transform(team_1_df2023)
+            X_std_2 = self.scaler.transform(team_2_df2023) 
+            X_pca_1 = self.pca.transform(X_std_1)
+            X_pca_2 = self.pca.transform(X_std_2)
+            team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+            team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+            ma_range = np.arange(2,5,1)
+            # print(team_1_df2023)
+            #avoid dropping column issue
+            data1_mean = DataFrame()
+            data2_mean = DataFrame()
+            team_1_pred = []
+            team_2_pred = []
+            for ma in tqdm(ma_range):
+                data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                # for cols in team_1_df2023.columns:
+                    # # ['cli', 'inherited_runners', 'inherited_score']
+                    # if "cli" not in cols or "inherited_runners" not in cols or "inherited_score" not in cols:
+                    #     # data1_mean[cols] = team_1_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
+                    #     # data2_mean[cols] = team_2_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
+                    #     data1_mean[cols] = team_1_df2023[cols].rolling(ma,min_periods=ma-1).median()
+                    #     data2_mean[cols] = team_2_df2023[cols].rolling(ma,min_periods=ma-1).median()
+                    # else:
+                    #     data1_mean[cols] = team_1_df2023[cols]
+                    #     data2_mean[cols] = team_2_df2023[cols]
+                # data1_mean = team_1_df2023.dropna().rolling(ma,min_periods=ma-1).median()
+                # data2_mean = team_2_df2023.dropna().rolling(ma,min_periods=ma-1).median()
+                # data1_mean['game_location'] = game_loc_team1
+                # data2_mean['game_location'] = game_loc_team2
+                #TEAM 1 Prediction
+                # x_new = self.scaler.transform(data1_mean.iloc[-1:])
+                # x_new2 = self.scaler.transform(data2_mean.iloc[-1:])
+                prediction = self.model.predict(data1_mean.iloc[-1:])
+                prediction2 = self.model.predict(data2_mean.iloc[-1:])
+                team_1_pred.append(prediction[0][0]*100)
+                team_2_pred.append(prediction2[0][0]*100)
+            print(f'prediction {team_1}: {team_1_pred}%')
+            print(f'prediction {team_2}: {team_2_pred}%')
+            print('====================================')
+            if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
+                print('Game will be close.')
+            if sum(team_1_pred) > sum(team_2_pred):
+                print(f'{team_1} wins')
+            elif sum(team_1_pred) < sum(team_2_pred):
+                print(f'{team_2} wins')
+            print('====================================')
     def predcit_two_teams_running(self):
         while True:
             print(f'ALL TEAMS: {sorted(self.teams_abv)}')
@@ -304,8 +372,8 @@ class mlbDeep():
             team_1_df2023.drop(columns=['game_result'],inplace=True)
             team_2_df2023.drop(columns=['game_result'],inplace=True)
             #Drop the correlated features
-            team_1_df2023.drop(columns=self.drop_cols, inplace=True)
-            team_2_df2023.drop(columns=self.drop_cols, inplace=True)
+            # team_1_df2023.drop(columns=self.drop_cols, inplace=True)
+            # team_2_df2023.drop(columns=self.drop_cols, inplace=True)
             #convert to float
             for col in team_1_df2023.columns:
                 team_1_df2023[col].replace('', np.nan, inplace=True)
@@ -331,22 +399,34 @@ class mlbDeep():
             data2_mean = DataFrame()
             for val in range_ma:
                 for col in team_2_df2023.columns:
-                    if 'game_result' in col or 'simple_rating_system' in col or 'game_loc' in col:
+                    if 'game_result' in col or 'simple_rating_system' in col or 'game_location' in col:
                         continue
                         # data2_mean[col] = team_2_df2023[col]
                     else:
                         dynamic_name = col + '_' + str(val)
                         data2_mean[dynamic_name] = team_2_df2023[col].ewm(span=val,min_periods=0).mean()
             team_2_df2023 = concat([team_2_df2023, data2_mean], axis=1)
+            #PCA and standardize
+            X_std_1 = self.scaler_ma.transform(team_1_df2023)
+            X_std_2 = self.scaler_ma.transform(team_2_df2023) 
+            X_pca_1 = self.pca_ma.transform(X_std_1)
+            X_pca_2 = self.pca_ma.transform(X_std_2)
+            team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca_ma.n_components_+1)])
+            team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca_ma.n_components_+1)])
             prediction = self.model.predict(team_1_df2023.iloc[-1:])
             prediction2 = self.model.predict(team_2_df2023.iloc[-1:])
+            print('============================================')
             print(f'prediction {team_1}: {prediction[0][0]*100}%')
             print(f'prediction {team_2}: {prediction2[0][0]*100}%')
+            print('============================================')
     def run_analysis(self):
         self.get_teams()
         self.split()
+        self.split_ma()
         self.deep_learn()
+        self.deep_learn_ma()
         self.predict_two_teams()
+        self.predcit_two_teams_running()
 def main():
     mlbDeep().run_analysis()
 if __name__ == '__main__':
