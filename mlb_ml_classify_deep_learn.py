@@ -89,6 +89,22 @@ class mlbDeep():
             self.all_data[col].replace('', np.nan, inplace=True)
             self.all_data[col] = self.all_data[col].astype(float)
 
+    def feature_engineering(self):
+        for col in self.all_data.columns:
+            if 'Unnamed' in col:
+                self.all_data.drop(columns=col,inplace=True)
+        range_ma = [2,3,4]
+        temp_ma = DataFrame()
+        for val in range_ma:
+            for col in self.all_data.columns:
+                if 'game_result' in col or 'game_location' in col:
+                    continue
+                    # temp_ma[col] = self.all_data[col]
+                else:
+                    dynamic_name = col + '_' + str(val)
+                    temp_ma[dynamic_name] = self.all_data[col].ewm(span=val,min_periods=0).mean()
+        self.all_data = concat([self.all_data, temp_ma], axis=1)
+
     def pre_process(self):
         # Remove features with a correlation coef greater than 0.85
         corr_matrix = np.abs(self.x.astype(float).corr())
@@ -96,7 +112,9 @@ class mlbDeep():
         to_drop = [column for column in upper.columns if any(upper[column] >= 0.90)]
         self.drop_cols = to_drop
         self.x_no_corr = self.x.drop(columns=to_drop)
-        print(f'Columns dropped  >= 0.90: {to_drop}')
+        # No removal of correlations yet
+        self.x_no_corr = self.x
+        print(f'Columns that could be dropped  >= 0.90: {to_drop}')
         #Drop samples that are outliers 
         print(f'old feature dataframe shape before outlier removal: {self.x_no_corr.shape}')
         # Q1 = np.percentile(self.x_no_corr, 25, axis=0)
@@ -115,6 +133,7 @@ class mlbDeep():
             if 'Unnamed' in col:
                 self.all_data.drop(columns=col,inplace=True)
         self.convert_to_float()
+        # self.feature_engineering()
         self.y = self.all_data['game_result'].astype(int)
         self.x = self.all_data.drop(columns=['game_result'])
         self.pre_process()
@@ -144,7 +163,8 @@ class mlbDeep():
             # Best: 0.999925 using {'alpha': 0.1, 'batch_size': 32, 'dropout_rate': 0.2,
             #  'learning_rate': 0.001, 'neurons': 16}
             optimizer = keras.optimizers.Adam(learning_rate=0.001,
-                                              kernel_regularizer=regularizers.l2(0.001))
+                                            #   kernel_regularizer=regularizers.l2(0.001)
+                                              )
             self.model = keras.Sequential([
                     layers.Dense(16, input_shape=(self.x_no_corr.shape[1],)),
                     layers.LeakyReLU(alpha=0.1),
@@ -204,8 +224,8 @@ class mlbDeep():
                 team_1_df2023.drop(columns=['game_result'],inplace=True)
                 team_2_df2023.drop(columns=['game_result'],inplace=True)
                 #Drop the correlated features
-                team_1_df2023.drop(columns=self.drop_cols, inplace=True)
-                team_2_df2023.drop(columns=self.drop_cols, inplace=True)
+                # team_1_df2023.drop(columns=self.drop_cols, inplace=True)
+                # team_2_df2023.drop(columns=self.drop_cols, inplace=True)
                 #convert to float
                 for col in team_1_df2023.columns:
                     team_1_df2023[col].replace('', np.nan, inplace=True)
@@ -262,6 +282,66 @@ class mlbDeep():
                 elif sum(team_1_pred) < sum(team_2_pred):
                     print(f'{team_2} wins')
                 print('====================================')
+    def predcit_two_teams_running(self):
+        while True:
+            print(f'ALL TEAMS: {sorted(self.teams_abv)}')
+            team_1 = input('team_1: ').upper()
+            if team_1 == 'EXIT':
+                break
+            team_2 = input('team_2: ').upper()
+            #Game location
+            game_loc_team1 = int(input(f'{team_1} : #Away = 0, Home = 1: '))
+            if game_loc_team1 == 0:
+                game_loc_team2 = 1
+            elif game_loc_team1 == 1:
+                game_loc_team2 = 0
+            #2023 data
+            year = 2023
+            team_1_df2023 = web_scrape_mlb.get_data_team(team_1,year)
+            sleep(4)
+            team_2_df2023 = web_scrape_mlb.get_data_team(team_2,year)
+            #Remove Game Result
+            team_1_df2023.drop(columns=['game_result'],inplace=True)
+            team_2_df2023.drop(columns=['game_result'],inplace=True)
+            #Drop the correlated features
+            team_1_df2023.drop(columns=self.drop_cols, inplace=True)
+            team_2_df2023.drop(columns=self.drop_cols, inplace=True)
+            #convert to float
+            for col in team_1_df2023.columns:
+                team_1_df2023[col].replace('', np.nan, inplace=True)
+                team_2_df2023[col].replace('', np.nan, inplace=True)
+                team_1_df2023[col] = team_1_df2023[col].astype(float)
+                team_2_df2023[col] = team_2_df2023[col].astype(float)
+            team_1_df2023.dropna(inplace=True)
+            team_2_df2023.dropna(inplace=True)
+            #Range over all ranges data were trained on
+            range_ma = [2,3,4]
+            #Team 1
+            data1_mean = DataFrame() 
+            for val in range_ma:
+                for col in team_1_df2023.columns:
+                    if 'game_result' in col or 'game_location' in col:
+                        continue
+                        # data1_mean[col] = team_1_df2023[col]
+                    else:
+                        dynamic_name = col + '_' + str(val)
+                        data1_mean[dynamic_name] = team_1_df2023[col].ewm(span=val,min_periods=0).mean()
+            team_1_df2023 = concat([team_1_df2023, data1_mean], axis=1)
+            #Team 2
+            data2_mean = DataFrame()
+            for val in range_ma:
+                for col in team_2_df2023.columns:
+                    if 'game_result' in col or 'simple_rating_system' in col or 'game_loc' in col:
+                        continue
+                        # data2_mean[col] = team_2_df2023[col]
+                    else:
+                        dynamic_name = col + '_' + str(val)
+                        data2_mean[dynamic_name] = team_2_df2023[col].ewm(span=val,min_periods=0).mean()
+            team_2_df2023 = concat([team_2_df2023, data2_mean], axis=1)
+            prediction = self.model.predict(team_1_df2023.iloc[-1:])
+            prediction2 = self.model.predict(team_2_df2023.iloc[-1:])
+            print(f'prediction {team_1}: {prediction[0][0]*100}%')
+            print(f'prediction {team_2}: {prediction2[0][0]*100}%')
     def run_analysis(self):
         self.get_teams()
         self.split()
