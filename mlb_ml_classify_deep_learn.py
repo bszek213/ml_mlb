@@ -18,7 +18,7 @@ from sklearn.model_selection import GridSearchCV
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-# from sys import argv
+from sys import argv
 import joblib
 from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
 from difflib import get_close_matches
@@ -27,7 +27,10 @@ from keras.callbacks import TensorBoard, EarlyStopping
 # from sklearn.metrics import roc_curve
 import seaborn as sns
 from sklearn.decomposition import PCA
+import warnings
 
+# Ignore the warning
+warnings.filterwarnings("ignore")
 
 class mlbDeep():
     def __init__(self):
@@ -288,7 +291,7 @@ class mlbDeep():
             team_1_df2023 = web_scrape_mlb.get_data_team(self.team_1,year)
             sleep(4)
             team_2_df2023 = web_scrape_mlb.get_data_team(self.team_2,year)
-            #Remove Game Result add ame location
+            #Remove Game Result add game location
             team_1_df2023.drop(columns=['game_result'],inplace=True)
             team_2_df2023.drop(columns=['game_result'],inplace=True)
             team_1_df2023.loc[-1,'game_location'] = self.game_loc_team1
@@ -353,7 +356,7 @@ class mlbDeep():
                 self.team_outcome = self.team_1
                 # print(f'{self.team_1} wins')
             elif sum(team_1_pred) < sum(team_2_pred):
-                self.team_outcome = self.team_1
+                self.team_outcome = self.team_2
             #     print(f'{self.team_2} wins')
             print('====================================')
             self.predict_two_teams_running()
@@ -437,14 +440,115 @@ class mlbDeep():
         elif prediction[0][0]*100 < prediction2[0][0]*100:
             print(f'{self.team_2} wins')
         print('============================================')
+
+    def test_ma(self):
+        final_list = []
+        model = keras.models.load_model('deep_learning_mlb_class.h5')
+        final_df_mean = DataFrame()
+        final_df_median= DataFrame()
+        for abv in tqdm(sorted(self.teams_abv)):
+            # try:
+            print() #tqdm things
+            print(f'current team: {abv}, year: {2023}')
+            df_inst = web_scrape_mlb.get_data_team(abv,2023)
+            # df_inst.drop(columns=self.drop_cols, inplace=True)
+            for col in df_inst.columns:
+                df_inst[col].replace('', np.nan, inplace=True)
+                df_inst[col] = df_inst[col].astype(float)
+            game_result_series = df_inst['game_result']
+            df_inst.drop(columns=['game_result'],inplace=True)
+            df_inst.dropna(inplace=True)
+            #PCA and standardize
+            X_std_1 = self.scaler.transform(df_inst)
+            X_pca_1 = self.pca.transform(X_std_1)
+            team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+            
+            ma_range = np.arange(2,len(team_1_df2023)-1)
+            # range_mean = []
+            # range_median = []
+            dict_range_mean = {}
+            dict_range_median = {}
+            for ma in tqdm(ma_range):
+                data1_mean = team_1_df2023.iloc[0:-1].ewm(span=ma,min_periods=ma-1).mean()
+                data1_median = team_1_df2023.iloc[0:-1].rolling(ma).median()
+                prediction_mean = model.predict(data1_mean.iloc[-1:])
+                prediction_median = model.predict(data1_median.iloc[-1:])
+                if prediction_mean[0][0] > 0.5:
+                    result_mean = 1
+                else:
+                    result_mean = 0
+                if prediction_median[0][0] > 0.5:
+                    result_median = 1
+                else:
+                    result_median = 0
+                if int(game_result_series.iloc[-1]) == result_mean:
+                    range_mean = 1
+                else:
+                    range_mean = 0
+                if int(game_result_series.iloc[-1]) == result_median:
+                    range_median = 1
+                else:
+                    range_median = 0
+                dict_range_mean[ma] = [range_mean]
+                dict_range_median[ma] = [range_median]
+            final_df_mean = concat([final_df_mean, DataFrame(dict_range_mean)])
+            final_df_median = concat([final_df_median, DataFrame(dict_range_median)])
+            # print(final_df_mean)
+            # print(final_df_mean.dropna(axis=1))
+            # sleep(1)
+                
+        final_df_mean = final_df_mean.dropna(axis=1)
+        final_df_median = final_df_median.dropna(axis=1)
+        column_sums_mean = final_df_mean.sum(axis=0)
+        column_sums_median = final_df_median.sum(axis=0)
+        proportions_mean = column_sums_mean / len(final_df_mean)
+        proportions_median = column_sums_median / len(final_df_median)
+
+        sorted_columns = column_sums_mean.sort_values(ascending=False)
+        # Print the sorted columns
+        print(f'mean sorted values: {sorted_columns}')
+
+        sorted_columns = column_sums_median.sort_values(ascending=False)
+        # Print the sorted columns
+        print(f'median sorted values: {sorted_columns}')
+    
+        #plot the summed values of correct 
+        plt.figure()
+        plt.bar(final_df_mean.columns, proportions_mean)
+        plt.xlabel('Column')
+        plt.ylabel('Proportion')
+        plt.title('Proportions of Summed Values - Mean')
+        plt.xticks(rotation=90)
+        plt.savefig('best_mean_ma.png',dpi=350)
+        plt.figure()
+        plt.bar(final_df_median.columns, proportions_median)
+        plt.xlabel('Column')
+        plt.ylabel('Proportion')
+        plt.title('Proportions of Summed Values - Median')
+        plt.xticks(rotation=90)
+        plt.savefig('best_median_ma.png',dpi=350)
+
+        # final_list.append(df_inst)
+        #     except Exception as e:
+        #         print(e)
+        #         print(f'{abv} data are not available')
+        #     sleep(4) #I get get banned for a small period of time if I do not do this
+        # final_test_data = concat(final_list)
+
+
     def run_analysis(self):
-        self.get_teams()
-        self.split()
-        self.split_ma()
-        self.deep_learn()
-        self.deep_learn_ma()
-        self.predict_two_teams()
-        # self.predict_two_teams_running()
+        if argv[1] == "test":
+            self.get_teams()
+            self.split()
+            self.test_ma()
+        else:
+            self.get_teams()
+            self.split()
+            self.split_ma()
+            self.deep_learn()
+            self.deep_learn_ma()
+            self.predict_two_teams()
+            # self.predict_two_teams_running()
 def main():
     mlbDeep().run_analysis()
 if __name__ == '__main__':
