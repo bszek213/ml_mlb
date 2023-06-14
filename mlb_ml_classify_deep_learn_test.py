@@ -4,7 +4,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from keras import regularizers
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import web_scrape_mlb
 from os import getcwd
 from os.path import join, exists 
@@ -138,47 +138,29 @@ class mlbDeep():
         self.convert_to_float()
         # self.feature_engineering()
         self.y = self.all_data['game_result'].astype(int)
-        self.x = self.all_data.drop(columns=['game_result'])
-        self.pre_process()
+        self.drop_cols_manual = ['game_result','inherited_runners','inherited_score']
+        self.x = self.all_data.drop(columns=self.drop_cols_manual)
+
+        # self.pre_process()
         #Dropna and remove all data from subsequent y data
-        real_values = ~self.x_no_corr.isna().any(axis=1)
-        self.x_no_corr.dropna(inplace=True)
-        self.y = self.y.loc[real_values]
+        # real_values = ~self.x_no_corr.isna().any(axis=1)
+        # self.x_no_corr.dropna(inplace=True)
+        # self.y = self.y.loc[real_values]
         #StandardScaler
-        self.scaler = StandardScaler()
-        X_std = self.scaler.fit_transform(self.x_no_corr)
+        # self.scaler = StandardScaler()
+        self.scaler = MinMaxScaler(feature_range=(-1, 1))
+        X_std = self.scaler.fit_transform(self.x)
         #PCA data down to 95% explained variance
         self.pca = PCA(n_components=0.95)
         X_pca = self.pca.fit_transform(X_std)
         # Check the number of components that were retained
         print('Number of components:', self.pca.n_components_)
-        self.x_no_corr = DataFrame(X_pca, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_no_corr, self.y, train_size=0.8)
-        # normalize data
-        # self.scaler = StandardScaler()
-        # self.x_train = self.scaler.transform(self.x_train)
-        # self.x_test = self.scaler.transform(self.x_test)
-    def split_ma(self):
-        self.convert_to_float()
-        self.y_ma = self.all_data['game_result'].astype(int)
-        self.x_ma = self.all_data.drop(columns=['game_result'])
-        self.feature_engineering()
-        #Dropna and remove all data from subsequent y data
-        real_values = ~self.x_ma.isna().any(axis=1)
-        self.x_ma.dropna(inplace=True)
-        self.y_ma = self.y_ma.loc[real_values]
-        #StandardScaler
-        self.scaler_ma = StandardScaler()
-        X_std = self.scaler_ma.fit_transform(self.x_ma)
-        #PCA data down to 95% explained variance
-        self.pca_ma = PCA(n_components=0.95)
-        X_pca_ma = self.pca_ma.fit_transform(X_std)
-        # Check the number of components that were retained
-        self.x_ma = DataFrame(X_pca_ma, columns=[f'PC{i}' for i in range(1, self.pca_ma.n_components_+1)])
-        self.x_train_ma, self.x_test_ma, self.y_train_ma, self.y_test_ma = train_test_split(self.x_ma, self.y_ma, train_size=0.8)
+        self.x_data = DataFrame(X_pca, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_data, self.y, train_size=0.8)
+   
     def deep_learn(self):
-        if exists('deep_learning_mlb_class.h5'):
-            self.model = keras.models.load_model('deep_learning_mlb_class.h5')
+        if exists('deep_learning_mlb_class_test.h5'):
+            self.model = keras.models.load_model('deep_learning_mlb_class_test.h5')
         else:
             #best params
             # Best: 0.999925 using {'alpha': 0.1, 'batch_size': 32, 'dropout_rate': 0.2,
@@ -187,28 +169,28 @@ class mlbDeep():
                                             #   kernel_regularizer=regularizers.l2(0.001)
                                               )
             self.model = keras.Sequential([
-                    layers.Dense(16, input_shape=(self.x_no_corr.shape[1],)),
-                    layers.LeakyReLU(alpha=0.1),
+                    layers.Dense(48, input_shape=(self.x_data.shape[1],)),
+                    layers.LeakyReLU(alpha=0.2),
                     layers.BatchNormalization(),
                     layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
+                    layers.Dense(44),
+                    layers.LeakyReLU(alpha=0.2),
                     layers.BatchNormalization(),
                     layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
+                    layers.Dense(40),
+                    layers.LeakyReLU(alpha=0.2),
                     layers.BatchNormalization(),
                     layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
+                    layers.Dense(36),
+                    layers.LeakyReLU(alpha=0.2),
                     layers.BatchNormalization(),
                     layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
+                    layers.Dense(32),
+                    layers.LeakyReLU(alpha=0.2),
                     layers.BatchNormalization(),
                     layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
+                    layers.Dense(28),
+                    layers.LeakyReLU(alpha=0.2),
                     layers.BatchNormalization(),
                     layers.Dropout(0.2),
                     layers.Dense(1, activation='sigmoid')
@@ -222,57 +204,8 @@ class mlbDeep():
             early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
             self.model.fit(self.x_train,self.y_train,epochs=500, batch_size=64, verbose=0,
                                     validation_data=(self.x_test,self.y_test),callbacks=[tensorboard_callback]) 
-            self.model.save('deep_learning_mlb_class.h5')
-    def deep_learn_ma(self):
-        if exists('deep_learning_ma_mlb_class.h5'):
-            self.model_ma = keras.models.load_model('deep_learning_ma_mlb_class.h5')
-        else:
-            #best params
-            # Best: 0.999925 using {'alpha': 0.1, 'batch_size': 32, 'dropout_rate': 0.2,
-            #  'learning_rate': 0.001, 'neurons': 16}
-            optimizer = keras.optimizers.Adam(learning_rate=0.001,
-                                            #   kernel_regularizer=regularizers.l2(0.001)
-                                              )
-            self.x_train_ma, self.x_test_ma, self.y_train_ma, self.y_test_ma
-            self.model_ma = keras.Sequential([
-                    layers.Dense(16, input_shape=(self.x_train_ma.shape[1],)),
-                    layers.LeakyReLU(alpha=0.1),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(16),
-                    layers.LeakyReLU(alpha=0.1),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(1, activation='sigmoid')
-                ])
-            self.model.compile(optimizer=optimizer,
-                loss='binary_crossentropy',
-                metrics=['accuracy'])
-            self.model_ma.summary()
-            print('Number of components Moving Average:', self.pca_ma.n_components_)
-            print('Number of components:', self.pca.n_components_)
-            #run this to see the tensorBoard: tensorboard --logdir=./logs
-            tensorboard_callback = TensorBoard(log_dir="./logs")
-            early_stop = EarlyStopping(monitor='val_loss', patience=50, mode='min', verbose=1)
-            self.model_ma.fit(self.x_train_ma,self.y_train_ma,epochs=500, batch_size=64, verbose=0,
-                                    validation_data=(self.x_test_ma,self.y_test_ma),callbacks=[tensorboard_callback]) 
-            self.model_ma.save('deep_learning_ma_mlb_class.h5')
+            self.model.save('deep_learning_mlb_class_test.h5')
+
     def predict_two_teams(self):
         while True:
             print(f'ALL TEAMS: {sorted(self.teams_abv)}')
@@ -292,8 +225,8 @@ class mlbDeep():
             sleep(4)
             team_2_df2023 = web_scrape_mlb.get_data_team(self.team_2,year)
             #Remove Game Result add game location
-            team_1_df2023.drop(columns=['game_result'],inplace=True)
-            team_2_df2023.drop(columns=['game_result'],inplace=True)
+            team_1_df2023.drop(columns=self.drop_cols_manual,inplace=True)
+            team_2_df2023.drop(columns=self.drop_cols_manual,inplace=True)
             team_1_df2023.loc[-1,'game_location'] = self.game_loc_team1
             team_2_df2023.loc[-1,'game_location'] = self.game_loc_team2
             #Drop the correlated features
@@ -363,90 +296,10 @@ class mlbDeep():
             #     print(f'{self.team_2} wins')
             print('====================================')
             # self.predict_two_teams_running()
-    def predict_two_teams_running(self):
-        # while True:
-        # print(f'ALL TEAMS: {sorted(self.teams_abv)}')
-        # self.team_1 = input('team_1: ').upper()
-        # if self.team_1 == 'EXIT':
-        #     break
-        # self.team_2 = input('team_2: ').upper()
-        #Game location
-        # self.game_loc_team1 = int(input(f'{self.team_1} : #Away = 0, Home = 1: '))
-        if self.game_loc_team1 == 0:
-            self.game_loc_team2 = 1
-        elif self.game_loc_team1 == 1:
-            self.game_loc_team2 = 0
-        #2023 data
-        year = 2023
-        team_1_df2023 = web_scrape_mlb.get_data_team(self.team_1,year)
-        sleep(4)
-        team_2_df2023 = web_scrape_mlb.get_data_team(self.team_2,year)
-        #Remove Game Result
-        team_1_df2023.drop(columns=['game_result'],inplace=True)
-        team_2_df2023.drop(columns=['game_result'],inplace=True)
-        #Drop the correlated features
-        # team_1_df2023.drop(columns=self.drop_cols, inplace=True)
-        # team_2_df2023.drop(columns=self.drop_cols, inplace=True)
-        #convert to float
-        for col in team_1_df2023.columns:
-            team_1_df2023[col].replace('', np.nan, inplace=True)
-            team_2_df2023[col].replace('', np.nan, inplace=True)
-            team_1_df2023[col] = team_1_df2023[col].astype(float)
-            team_2_df2023[col] = team_2_df2023[col].astype(float)
-        team_1_df2023.dropna(inplace=True)
-        team_2_df2023.dropna(inplace=True)
-        #Range over all ranges data were trained on
-        range_ma = [2,3,4]
-        #Team 1
-        data1_mean = DataFrame() 
-        for val in range_ma:
-            for col in team_1_df2023.columns:
-                if 'game_result' in col or 'game_location' in col:
-                    continue
-                    # data1_mean[col] = team_1_df2023[col]
-                else:
-                    dynamic_name = col + '_' + str(val)
-                    data1_mean[dynamic_name] = team_1_df2023[col].ewm(span=val,min_periods=0).mean()
-        team_1_df2023 = concat([team_1_df2023, data1_mean], axis=1)
-        #Team 2
-        data2_mean = DataFrame()
-        for val in range_ma:
-            for col in team_2_df2023.columns:
-                if 'game_result' in col or 'simple_rating_system' in col or 'game_location' in col:
-                    continue
-                    # data2_mean[col] = team_2_df2023[col]
-                else:
-                    dynamic_name = col + '_' + str(val)
-                    data2_mean[dynamic_name] = team_2_df2023[col].ewm(span=val,min_periods=0).mean()
-        team_2_df2023 = concat([team_2_df2023, data2_mean], axis=1)
-        #PCA and standardize
-        X_std_1 = self.scaler_ma.transform(team_1_df2023)
-        X_std_2 = self.scaler_ma.transform(team_2_df2023) 
-        X_pca_1 = self.pca_ma.transform(X_std_1)
-        X_pca_2 = self.pca_ma.transform(X_std_2)
-        team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca_ma.n_components_+1)])
-        team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca_ma.n_components_+1)])
-        prediction = self.model_ma.predict(team_1_df2023.iloc[-1:])
-        prediction2 = self.model_ma.predict(team_2_df2023.iloc[-1:])
-        self.save_outcomes_1
-        print('============================================')
-        print('MODEL TRAINED ON GAME DATA')
-        print(f'predictions {self.team_1}: {self.save_outcomes_1}%')
-        print(f'predictions {self.team_2}: {self.save_outcomes_2}%')
-        print(f'{self.team_outcome} wins')
-        print('============================================')
-        print('MODEL TRAINED ON MOVING AVERAGE PREDICTION')
-        print(f'prediction {self.team_1}: {prediction[0][0]*100}%')
-        print(f'prediction {self.team_2}: {prediction2[0][0]*100}%')
-        if prediction[0][0]*100 > prediction2[0][0]*100:
-            print(f'{self.team_1} wins')
-        elif prediction[0][0]*100 < prediction2[0][0]*100:
-            print(f'{self.team_2} wins')
-        print('============================================')
 
     def test_ma(self):
         final_list = []
-        model = keras.models.load_model('deep_learning_mlb_class.h5')
+        model = keras.models.load_model('deep_learning_mlb_class_test.h5')
         final_df_mean = DataFrame()
         final_df_median= DataFrame()
         for abv in tqdm(sorted(self.teams_abv)):
@@ -459,7 +312,7 @@ class mlbDeep():
                 df_inst[col].replace('', np.nan, inplace=True)
                 df_inst[col] = df_inst[col].astype(float)
             game_result_series = df_inst['game_result']
-            df_inst.drop(columns=['game_result'],inplace=True)
+            df_inst.drop(columns=self.drop_cols_manual,inplace=True)
             df_inst.dropna(inplace=True)
             #PCA and standardize
             X_std_1 = self.scaler.transform(df_inst)
@@ -547,9 +400,9 @@ class mlbDeep():
         else:
             self.get_teams()
             self.split()
-            self.split_ma()
+            # self.split_ma()
             self.deep_learn()
-            self.deep_learn_ma()
+            # self.deep_learn_ma()
             self.predict_two_teams()
             # self.predict_two_teams_running()
 def main():
