@@ -43,7 +43,7 @@ class mlbDeep():
         #     self.RandForRegressor=joblib.load("./randomForestModelTuned.joblib")
     def get_teams(self):
         year_list_find = []
-        year_list = [2018,2019,2020,2021,2022,2023] #
+        year_list = [2017,2018,2019,2020,2021,2022,2023] #
         if exists(join(getcwd(),'year_count.yaml')):
             with open(join(getcwd(),'year_count.yaml')) as file:
                 year_counts = yaml.load(file, Loader=yaml.FullLoader)

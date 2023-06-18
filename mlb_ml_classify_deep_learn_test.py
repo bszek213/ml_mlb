@@ -43,7 +43,7 @@ class mlbDeep():
         #     self.RandForRegressor=joblib.load("./randomForestModelTuned.joblib")
     def get_teams(self):
         year_list_find = []
-        year_list = [2018,2019,2020,2021,2022,2023] #
+        year_list = [2017,2018,2019,2020,2021,2022,2023] #
         if exists(join(getcwd(),'year_count.yaml')):
             with open(join(getcwd(),'year_count.yaml')) as file:
                 year_counts = yaml.load(file, Loader=yaml.FullLoader)
@@ -147,8 +147,8 @@ class mlbDeep():
         # self.x_no_corr.dropna(inplace=True)
         # self.y = self.y.loc[real_values]
         #StandardScaler
-        # self.scaler = StandardScaler()
-        self.scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.scaler = StandardScaler()
+        # self.scaler = MinMaxScaler(feature_range=(0, 1))
         X_std = self.scaler.fit_transform(self.x)
         #PCA data down to 95% explained variance
         self.pca = PCA(n_components=0.95)
@@ -202,7 +202,7 @@ class mlbDeep():
             #run this to see the tensorBoard: tensorboard --logdir=./logs
             tensorboard_callback = TensorBoard(log_dir="./logs")
             early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
-            self.model.fit(self.x_train,self.y_train,epochs=500, batch_size=64, verbose=0,
+            self.model.fit(self.x_train,self.y_train,epochs=500, batch_size=128, verbose=0,
                                     validation_data=(self.x_test,self.y_test),callbacks=[tensorboard_callback]) 
             self.model.save('deep_learning_mlb_class_test.h5')
 
@@ -351,7 +351,7 @@ class mlbDeep():
             final_df_median = concat([final_df_median, DataFrame(dict_range_median)])
             # print(final_df_mean)
             # print(final_df_mean.dropna(axis=1))
-            # sleep(1)
+            # sleep(1)  
                 
         final_df_mean = final_df_mean.dropna(axis=1)
         final_df_median = final_df_median.dropna(axis=1)

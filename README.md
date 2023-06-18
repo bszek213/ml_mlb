@@ -18,10 +18,10 @@ Columns dropped  >= 0.90: ['RBI', 'onbase_plus_slugging', 'ER', 'strikes_total']
 Number of samples: 21234
 
 ### Current prediction accuracies - DNN
-Validation Accuracy: 0.9793
-Train Accuracy: 0.9655
-Validation Loss: 0.05
-Train Loss: 0.09
+Validation Accuracy: 0.989
+Train Accuracy: 0.988
+Validation Loss: 0.0301
+Train Loss: 0.031
 ```
 
 ## Running average outcomes
