@@ -351,7 +351,8 @@ class mlbDeep():
             final_df_median = concat([final_df_median, DataFrame(dict_range_median)])
             # print(final_df_mean)
             # print(final_df_mean.dropna(axis=1))
-            # sleep(1)  
+            sleep(1)
+        
                 
         final_df_mean = final_df_mean.dropna(axis=1)
         final_df_median = final_df_median.dropna(axis=1)
