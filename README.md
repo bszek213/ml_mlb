@@ -14,14 +14,14 @@ python mlb_ml_classify_deep_learn.py test
 ```
 
 ```bash
-Columns dropped  >= 0.90: ['RBI', 'onbase_plus_slugging', 'ER', 'strikes_total']
-Number of samples: 21234
+Correlated features   >= 0.90: ['RBI', 'onbase_plus_slugging', 'ER', 'strikes_total']
+Number of samples: 28248
 
 ### Current prediction accuracies - DNN
-Validation Accuracy: 0.989
-Train Accuracy: 0.988
-Validation Loss: 0.0301
-Train Loss: 0.031
+Validation Accuracy: 0.985
+Train Accuracy: 0.986
+Validation Loss: 0.04
+Train Loss: 0.037
 ```
 
 ## Running average outcomes

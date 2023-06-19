@@ -84,7 +84,8 @@ class mlbDeep():
         self.all_data = read_csv(join(getcwd(),'all_data_regressor.csv'))
         print('len data: ', len(self.all_data))
         self.all_data = self.all_data.drop_duplicates(keep='last')
-        self.all_data.drop(columns='cli',inplace=True)
+        if 'cli' in self.all_data.columns:
+            self.all_data.drop(columns='cli',inplace=True)
         print(f'length of data after duplicates are dropped: {len(self.all_data)}')
     
     def convert_to_float(self):
@@ -247,7 +248,7 @@ class mlbDeep():
             X_pca_2 = self.pca.transform(X_std_2)
             team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
             team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-            ma_range = [2,3]
+            ma_range = [54,67]
             # print(team_1_df2023)
             #avoid dropping column issue
             data1_mean = DataFrame()
@@ -351,7 +352,7 @@ class mlbDeep():
             final_df_median = concat([final_df_median, DataFrame(dict_range_median)])
             # print(final_df_mean)
             # print(final_df_mean.dropna(axis=1))
-            sleep(1)
+            sleep(2)
         
                 
         final_df_mean = final_df_mean.dropna(axis=1)
