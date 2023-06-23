@@ -248,16 +248,22 @@ class mlbDeep():
             X_pca_2 = self.pca.transform(X_std_2)
             team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
             team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-            ma_range = [54,67]
+            ma_range = [18,53]
             # print(team_1_df2023)
             #avoid dropping column issue
             data1_mean = DataFrame()
             data2_mean = DataFrame()
             team_1_pred = []
             team_2_pred = []
+            median_bool = True
             for ma in tqdm(ma_range):
-                data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
-                data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                if median_bool == True:
+                    data1_mean = team_1_df2023.rolling(ma).median()
+                    data2_mean = team_2_df2023.rolling(ma).median()
+                else:
+                    data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                    data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
+
                 # for cols in team_1_df2023.columns:
                     # # ['cli', 'inherited_runners', 'inherited_score']
                     # if "cli" not in cols or "inherited_runners" not in cols or "inherited_score" not in cols:
@@ -303,7 +309,10 @@ class mlbDeep():
         model = keras.models.load_model('deep_learning_mlb_class_test.h5')
         final_df_mean = DataFrame()
         final_df_median= DataFrame()
-        for abv in tqdm(sorted(self.teams_abv)):
+        #load current day teams
+        team_names = read_csv('teams_curr_day.csv')
+        collapsed_list = team_names['Team_1'].tolist() + team_names['Team_1'].tolist()
+        for abv in tqdm(sorted(collapsed_list)):
             # try:
             print() #tqdm things
             print(f'current team: {abv}, year: {2023}')
@@ -352,7 +361,7 @@ class mlbDeep():
             final_df_median = concat([final_df_median, DataFrame(dict_range_median)])
             # print(final_df_mean)
             # print(final_df_mean.dropna(axis=1))
-            sleep(2)
+            sleep(3)
         
                 
         final_df_mean = final_df_mean.dropna(axis=1)
@@ -366,9 +375,17 @@ class mlbDeep():
         # Print the sorted columns
         print(f'mean sorted values: {sorted_columns}')
 
+        #print each mean and median percentage correct
+        print(f'mean percent correct: {(sorted_columns.iloc[0] / len(collapsed_list))*100}')
+
         sorted_columns = column_sums_median.sort_values(ascending=False)
         # Print the sorted columns
         print(f'median sorted values: {sorted_columns}')
+        print('=========')
+        print(sorted_columns.iloc[0])
+
+        #print each mean and median percentage correct
+        print(f'median percent correct: {(sorted_columns.iloc[0] / len(collapsed_list))*100}')
     
         #plot the summed values of correct 
         plt.figure()
