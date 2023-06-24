@@ -248,7 +248,7 @@ class mlbDeep():
             X_pca_2 = self.pca.transform(X_std_2)
             team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
             team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-            ma_range = [18,53]
+            ma_range = [15]
             # print(team_1_df2023)
             #avoid dropping column issue
             data1_mean = DataFrame()
