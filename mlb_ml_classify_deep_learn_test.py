@@ -93,22 +93,6 @@ class mlbDeep():
             self.all_data[col].replace('', np.nan, inplace=True)
             self.all_data[col] = self.all_data[col].astype(float)
 
-    def feature_engineering(self):
-        for col in self.all_data.columns:
-            if 'Unnamed' in col:
-                self.all_data.drop(columns=col,inplace=True)
-        range_ma = [2,3,4]
-        temp_ma = DataFrame()
-        for val in range_ma:
-            for col in self.x_ma.columns:
-                if 'game_result' in col or 'game_location' in col:
-                    continue
-                    # temp_ma[col] = self.all_data[col]
-                else:
-                    dynamic_name = col + '_' + str(val)
-                    temp_ma[dynamic_name] = self.x_ma[col].ewm(span=val,min_periods=0).mean()
-        self.x_ma = concat([self.x_ma, temp_ma], axis=1)
-
     def pre_process(self):
         # Remove features with a correlation coef greater than 0.85
         corr_matrix = np.abs(self.x.astype(float).corr())
@@ -132,15 +116,20 @@ class mlbDeep():
         print(f'new feature dataframe shape after outlier removal: {self.x_no_corr.shape}')
 
     def split(self):
-        # self.delete_opp()
+        #Remove any extraneous columns
         for col in self.all_data.columns:
             if 'Unnamed' in col:
                 self.all_data.drop(columns=col,inplace=True)
         self.convert_to_float()
-        # self.feature_engineering()
+
+        #Classification
         self.y = self.all_data['game_result'].astype(int)
         self.drop_cols_manual = ['game_result','inherited_runners','inherited_score']
         self.x = self.all_data.drop(columns=self.drop_cols_manual)
+
+        #Regression
+        self.y_regress = self.all_data['RS'].astype(int)
+        self.x_regress = self.all_data.drop(columns=self.drop_cols_manual)
 
         # self.pre_process()
         #Dropna and remove all data from subsequent y data
@@ -149,15 +138,25 @@ class mlbDeep():
         # self.y = self.y.loc[real_values]
         #StandardScaler
         self.scaler = StandardScaler()
+        self.scaler_regress = StandardScaler()
         # self.scaler = MinMaxScaler(feature_range=(0, 1))
         X_std = self.scaler.fit_transform(self.x)
+        X_std_regress = self.scaler_regress.fit_transform(self.x_regress)
         #PCA data down to 95% explained variance
         self.pca = PCA(n_components=0.95)
+        self.pca_regress = PCA(n_components=0.95)
         X_pca = self.pca.fit_transform(X_std)
+        X_pca_regress = self.pca_regress.fit_transform(X_std_regress)
+
         # Check the number of components that were retained
-        print('Number of components:', self.pca.n_components_)
+        print('Number of components Classifier:', self.pca.n_components_)
+        print('Number of components Regresso:', self.pca_regress.n_components_)
         self.x_data = DataFrame(X_pca, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+        self.x_data_regress = DataFrame(X_pca_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+
+        #split into training and validation
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_data, self.y, train_size=0.8)
+        self.x_train_regress, self.x_test_regress, self.y_train_regress, self.y_test_regress = train_test_split(self.x_data_regress, self.y_regress, train_size=0.8)
    
     def deep_learn(self):
         if exists('deep_learning_mlb_class_test.h5'):
@@ -199,6 +198,7 @@ class mlbDeep():
             self.model.compile(optimizer=optimizer,
                 loss='binary_crossentropy',
                 metrics=['accuracy'])
+            print('Training Classifier')
             self.model.summary()
             #run this to see the tensorBoard: tensorboard --logdir=./logs
             tensorboard_callback = TensorBoard(log_dir="./logs")
@@ -206,6 +206,55 @@ class mlbDeep():
             self.model.fit(self.x_train,self.y_train,epochs=500, batch_size=128, verbose=0,
                                     validation_data=(self.x_test,self.y_test),callbacks=[tensorboard_callback]) 
             self.model.save('deep_learning_mlb_class_test.h5')
+
+    def deep_learn_regress(self):
+        if exists('deep_learning_mlb_regress_test.h5'):
+            self.model_regress = keras.models.load_model('deep_learning_mlb_regress_test.h5')
+        else:
+            #best params
+            # Best: 0.999925 using {'alpha': 0.1, 'batch_size': 32, 'dropout_rate': 0.2,
+            #  'learning_rate': 0.001, 'neurons': 16}
+            optimizer = keras.optimizers.Adam(learning_rate=0.001,
+                                            #   kernel_regularizer=regularizers.l2(0.001)
+                                              )
+            self.model_regress = keras.Sequential([
+                    layers.Dense(48, input_shape=(self.x_data.shape[1],)),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(44),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(40),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(36),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(32),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(28),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(1, activation='relu')
+                ])
+            self.model_regress.compile(optimizer=optimizer,
+                loss='mean_squared_error',
+                metrics=['mse'])
+            print('Training Regressor')
+            self.model_regress.summary()
+            #run this to see the tensorBoard: tensorboard --logdir=./logs
+            tensorboard_callback = TensorBoard(log_dir="./logs")
+            early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
+            self.model_regress.fit(self.x_train_regress,self.y_train_regress,epochs=500, batch_size=128, verbose=0,
+                                    validation_data=(self.x_test_regress,self.y_test_regress),callbacks=[tensorboard_callback]) 
+            self.model_regress.save('deep_learning_mlb_regress_test.h5')
 
     def predict_two_teams(self):
         while True:
@@ -419,11 +468,9 @@ class mlbDeep():
         else:
             self.get_teams()
             self.split()
-            # self.split_ma()
             self.deep_learn()
-            # self.deep_learn_ma()
+            self.deep_learn_regress()
             self.predict_two_teams()
-            # self.predict_two_teams_running()
 def main():
     mlbDeep().run_analysis()
 if __name__ == '__main__':

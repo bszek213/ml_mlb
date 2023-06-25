@@ -222,12 +222,18 @@ def get_data_team(team,year):
     tr_body = tbody.find_all('tr')
     rank = []
     cli = []
+    RA = []
+    RS = []
     for trb in tr_body:
         for td in trb.find_all('td'):
             if td.get('data-stat') == 'rank':
                 rank.append(td.get_text())
             if td.get('data-stat') == 'cli':
                 cli.append(td.get_text())
+            if td.get('data-stat') == 'RA':
+                RA.append(td.get_text())
+            if td.get('data-stat') == 'R':
+                RS.append(td.get_text())
     # dict_val = {"game_result":game_result,
     #                   "PA":PA,
     #                   "AB":AB,
@@ -287,9 +293,10 @@ def get_data_team(team,year):
     # for key, value in dict_val.items():
     #     print(key, len(value))
     return DataFrame({"game_result":game_result,
+                      "RS":RS,
+                      "RA":RA,
                       "PA":PA,
                       "AB":AB,
-                      "R":R,
                       "H":H,
                       "second_base":second_base,
                       "third_base":third_base,
