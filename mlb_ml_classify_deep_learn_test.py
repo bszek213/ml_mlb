@@ -313,7 +313,6 @@ class mlbDeep():
             team_1_df2023_regress = DataFrame(X_pca_1_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
             team_2_df2023_regress = DataFrame(X_pca_2_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
     
-            ma_range = [2]
             #avoid dropping column issue
             # data1_mean = DataFrame()
             # data2_mean = DataFrame()
@@ -322,13 +321,14 @@ class mlbDeep():
             team_1_pred_regress = []
             team_2_pred_regress = []
             median_bool = True
+            ma_range = [6]
             for ma in tqdm(ma_range):
                 if median_bool == True:
                     data1_mean = team_1_df2023.rolling(ma).median()
                     data2_mean = team_2_df2023.rolling(ma).median()
                     #regress
-                    data1_mean_regress = team_1_df2023_regress.rolling(11).median()
-                    data2_mean_regress = team_2_df2023_regress.rolling(11).median()
+                    data1_mean_regress = team_1_df2023_regress.rolling(9).median()
+                    data2_mean_regress = team_2_df2023_regress.rolling(9).median()
                 else:
                     data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
                     data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
