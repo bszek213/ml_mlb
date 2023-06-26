@@ -122,6 +122,8 @@ class mlbDeep():
                 self.all_data.drop(columns=col,inplace=True)
         self.convert_to_float()
 
+        #Dropna
+        self.all_data.dropna(inplace=True)
         #Classification
         self.y = self.all_data['game_result'].astype(int)
         self.drop_cols_manual = ['game_result','inherited_runners','inherited_score']
@@ -130,6 +132,7 @@ class mlbDeep():
         #Regression
         self.y_regress = self.all_data['RS'].astype(int)
         self.x_regress = self.all_data.drop(columns=self.drop_cols_manual)
+        self.x_regress = self.x_regress.drop(columns=['RS'])
 
         # self.pre_process()
         #Dropna and remove all data from subsequent y data
@@ -150,7 +153,7 @@ class mlbDeep():
 
         # Check the number of components that were retained
         print('Number of components Classifier:', self.pca.n_components_)
-        print('Number of components Regresso:', self.pca_regress.n_components_)
+        print('Number of components Regressor:', self.pca_regress.n_components_)
         self.x_data = DataFrame(X_pca, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
         self.x_data_regress = DataFrame(X_pca_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
 
@@ -209,6 +212,7 @@ class mlbDeep():
 
     def deep_learn_regress(self):
         if exists('deep_learning_mlb_regress_test.h5'):
+            print('load trained regression model')
             self.model_regress = keras.models.load_model('deep_learning_mlb_regress_test.h5')
         else:
             #best params
@@ -218,7 +222,7 @@ class mlbDeep():
                                             #   kernel_regularizer=regularizers.l2(0.001)
                                               )
             self.model_regress = keras.Sequential([
-                    layers.Dense(48, input_shape=(self.x_data.shape[1],)),
+                    layers.Dense(48, input_shape=(self.x_train_regress.shape[1],)),
                     layers.LeakyReLU(alpha=0.2),
                     layers.BatchNormalization(),
                     layers.Dropout(0.2),
@@ -264,7 +268,7 @@ class mlbDeep():
                 break
             self.team_2 = input('team_2: ').upper()
             #Game location
-            self.game_loc_team1 = int(input(f'{self.team_1} : #Away = 0, Home = 1: '))
+            self.game_loc_team1 = int(input(f'{self.team_1} : Away = 0, Home = 1: '))
             if self.game_loc_team1 == 0:
                 self.game_loc_team2 = 1
             elif self.game_loc_team1 == 1:
@@ -290,28 +294,47 @@ class mlbDeep():
                 team_2_df2023[col] = team_2_df2023[col].astype(float)
             team_1_df2023.dropna(inplace=True)
             team_2_df2023.dropna(inplace=True)
+            #Drop RS for regression
+            team_1_df2023_regress = team_1_df2023.drop(columns=['RS'])
+            team_2_df2023_regress = team_2_df2023.drop(columns=['RS'])
             #PCA and standardize
             X_std_1 = self.scaler.transform(team_1_df2023)
             X_std_2 = self.scaler.transform(team_2_df2023) 
+            X_std_1_regress = self.scaler_regress.transform(team_1_df2023_regress)
+            X_std_2_regress = self.scaler_regress.transform(team_2_df2023_regress) 
+
             X_pca_1 = self.pca.transform(X_std_1)
             X_pca_2 = self.pca.transform(X_std_2)
+            X_pca_1_regress = self.pca_regress.transform(X_std_1_regress)
+            X_pca_2_regress = self.pca_regress.transform(X_std_2_regress)
+
             team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
             team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-            ma_range = [15]
-            # print(team_1_df2023)
+            team_1_df2023_regress = DataFrame(X_pca_1_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+            team_2_df2023_regress = DataFrame(X_pca_2_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+    
+            ma_range = [2]
             #avoid dropping column issue
-            data1_mean = DataFrame()
-            data2_mean = DataFrame()
+            # data1_mean = DataFrame()
+            # data2_mean = DataFrame()
             team_1_pred = []
             team_2_pred = []
+            team_1_pred_regress = []
+            team_2_pred_regress = []
             median_bool = True
             for ma in tqdm(ma_range):
                 if median_bool == True:
                     data1_mean = team_1_df2023.rolling(ma).median()
                     data2_mean = team_2_df2023.rolling(ma).median()
+                    #regress
+                    data1_mean_regress = team_1_df2023_regress.rolling(11).median()
+                    data2_mean_regress = team_2_df2023_regress.rolling(11).median()
                 else:
                     data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
                     data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                    #regress
+                    data1_mean_regress = team_1_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
+                    data2_mean_regress = team_2_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
 
                 # for cols in team_1_df2023.columns:
                     # # ['cli', 'inherited_runners', 'inherited_score']
@@ -332,15 +355,24 @@ class mlbDeep():
                 # x_new2 = self.scaler.transform(data2_mean.iloc[-1:])
                 prediction = self.model.predict(data1_mean.iloc[-1:])
                 prediction2 = self.model.predict(data2_mean.iloc[-1:])
+                prediction_1_regress = self.model_regress.predict(data1_mean_regress.iloc[-1:])
+                prediction_2_regress = self.model_regress.predict(data2_mean_regress.iloc[-1:])
                 team_1_pred.append(prediction[0][0]*100)
                 team_2_pred.append(prediction2[0][0]*100)
+                team_1_pred_regress.append(prediction_1_regress[0][0])
+                team_2_pred_regress.append(prediction_2_regress[0][0])
             self.save_outcomes_1 = team_1_pred
             self.save_outcomes_2 = team_2_pred
             # print(f'prediction {self.team_1}: {team_1_pred}%')
             # print(f'prediction {self.team_2}: {team_2_pred}%')
             print('====================================')
+            print('Classifier')
             print(f'{self.team_1} prediction: {self.save_outcomes_1}')
             print(f'{self.team_2} prediction: {self.save_outcomes_2}')
+            print('====================================')
+            print('Regressor')
+            print(f'{self.team_1} Predicted Scores: {team_1_pred_regress}')
+            print(f'{self.team_2} Predicted Scores: {team_2_pred_regress}')
             print('====================================')
             if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
                 print('Game will be close.')
@@ -350,14 +382,17 @@ class mlbDeep():
             elif sum(team_1_pred) < sum(team_2_pred):
                 self.team_outcome = self.team_2
             #     print(f'{self.team_2} wins')
-            print('====================================')
+            # print('====================================')
             # self.predict_two_teams_running()
 
     def test_ma(self):
-        final_list = []
+        # final_list = []
         model = keras.models.load_model('deep_learning_mlb_class_test.h5')
+        model_regress = keras.models.load_model('deep_learning_mlb_regress_test.h5')
         final_df_mean = DataFrame()
-        final_df_median= DataFrame()
+        final_df_median = DataFrame()
+        final_df_mean_regress = DataFrame()
+        final_df_median_regress = DataFrame()
         #load current day teams
         team_names = read_csv('teams_curr_day.csv')
         collapsed_list = team_names['Team_1'].tolist() + team_names['Team_1'].tolist()
@@ -370,24 +405,38 @@ class mlbDeep():
             for col in df_inst.columns:
                 df_inst[col].replace('', np.nan, inplace=True)
                 df_inst[col] = df_inst[col].astype(float)
+            #Actual
             game_result_series = df_inst['game_result']
+            game_score_series = df_inst['RS']
             df_inst.drop(columns=self.drop_cols_manual,inplace=True)
             df_inst.dropna(inplace=True)
+            df_inst_regress = df_inst.drop(columns=["RS"])
+
             #PCA and standardize
             X_std_1 = self.scaler.transform(df_inst)
+            X_std_1_regress = self.scaler_regress.transform(df_inst_regress)
             X_pca_1 = self.pca.transform(X_std_1)
+            X_pca_1_regress = self.pca_regress.transform(X_std_1_regress)
             team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+            team_1_df2023_regress = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
             
             ma_range = np.arange(2,len(team_1_df2023)-1)
-            # range_mean = []
-            # range_median = []
+            dict_range_mean_regress = {}
+            dict_range_median_regress = {}
             dict_range_mean = {}
             dict_range_median = {}
-            for ma in tqdm(ma_range):
+            for ma in ma_range:
+                #Get rolling mean and medians
                 data1_mean = team_1_df2023.iloc[0:-1].ewm(span=ma,min_periods=ma-1).mean()
+                data1_mean_regress = team_1_df2023_regress.iloc[0:-1].ewm(span=ma,min_periods=ma-1).mean()
                 data1_median = team_1_df2023.iloc[0:-1].rolling(ma).median()
+                data1_median_regress = team_1_df2023_regress.iloc[0:-1].rolling(ma).median()
+                #Predict
                 prediction_mean = model.predict(data1_mean.iloc[-1:])
                 prediction_median = model.predict(data1_median.iloc[-1:])
+                prediction_mean_regress = model_regress.predict(data1_mean_regress.iloc[-1:])
+                prediction_median_regress = model_regress.predict(data1_median_regress.iloc[-1:])
+                #classification
                 if prediction_mean[0][0] > 0.5:
                     result_mean = 1
                 else:
@@ -406,12 +455,33 @@ class mlbDeep():
                     range_median = 0
                 dict_range_mean[ma] = [range_mean]
                 dict_range_median[ma] = [range_median]
+                #Regression
+                diff_mean_regress = abs(prediction_mean_regress[0][0] - game_score_series.iloc[-1])
+                diff_median_regress = abs(prediction_median_regress[0][0] - game_score_series.iloc[-1])
+                print(f'mean diff :{diff_mean_regress}')
+                print(f'median diff :{diff_median_regress}')
+                dict_range_mean_regress[ma] = [diff_mean_regress]
+                dict_range_median_regress[ma] = [diff_median_regress]
+
             final_df_mean = concat([final_df_mean, DataFrame(dict_range_mean)])
             final_df_median = concat([final_df_median, DataFrame(dict_range_median)])
+            final_df_mean_regress = concat([final_df_mean_regress, DataFrame(dict_range_mean_regress)])
+            final_df_median_regress = concat([final_df_median_regress, DataFrame(dict_range_median_regress)])
             # print(final_df_mean)
             # print(final_df_mean.dropna(axis=1))
             sleep(3)
         
+        #Regression
+        final_df_mean_regress = final_df_mean_regress.dropna(axis=1)
+        final_df_median_regress = final_df_median_regress.dropna(axis=1)
+        column_sums_mean_regress = final_df_mean_regress.sum(axis=0)
+        column_sums_median_regress = final_df_median_regress.sum(axis=0)
+
+        sorted_columns_regress_mean = column_sums_mean_regress.sort_values(ascending=True)
+        sorted_columns_regress_median = column_sums_median_regress.sort_values(ascending=True)
+
+        print(f'Mean Regression columns: {sorted_columns_regress_mean}')
+        print(f'Median Regression columns: {sorted_columns_regress_median}')
                 
         final_df_mean = final_df_mean.dropna(axis=1)
         final_df_median = final_df_median.dropna(axis=1)
