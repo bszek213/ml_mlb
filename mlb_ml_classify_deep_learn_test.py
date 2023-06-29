@@ -580,7 +580,7 @@ class mlbDeep():
             #remove empty sublists and combine into one list
             merged_list = [item for sublist in per_team_best_rolling_vals if sublist for item in sublist]
             print(f'Total number of games: {num_iter}')
-            plt.figure()
+            plt.figure(figsize=[10,5])
             plt.hist(merged_list, bins=range(min(merged_list), max(merged_list)+2), rwidth=0.8, align='left')
             plt.xlabel('Value')
             plt.ylabel('Frequency')
