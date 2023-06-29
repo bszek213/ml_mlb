@@ -28,6 +28,9 @@ from keras.callbacks import TensorBoard, EarlyStopping
 import seaborn as sns
 from sklearn.decomposition import PCA
 import warnings
+import os
+import yaml
+from collections import Counter
 
 # Ignore the warning
 warnings.filterwarnings("ignore")
@@ -321,14 +324,14 @@ class mlbDeep():
             team_1_pred_regress = []
             team_2_pred_regress = []
             median_bool = True
-            ma_range = [6]
+            ma_range = [3]
             for ma in tqdm(ma_range):
                 if median_bool == True:
                     data1_mean = team_1_df2023.rolling(ma).median()
                     data2_mean = team_2_df2023.rolling(ma).median()
                     #regress
-                    data1_mean_regress = team_1_df2023_regress.rolling(9).median()
-                    data2_mean_regress = team_2_df2023_regress.rolling(9).median()
+                    data1_mean_regress = team_1_df2023_regress.rolling(3).median()
+                    data2_mean_regress = team_2_df2023_regress.rolling(3).median()
                 else:
                     data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
                     data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
@@ -529,12 +532,93 @@ class mlbDeep():
         #     sleep(4) #I get get banned for a small period of time if I do not do this
         # final_test_data = concat(final_list)
 
+    def test_each_team(self):
+        model = keras.models.load_model('deep_learning_mlb_class_test.h5')
+        # model_regress = keras.models.load_model('deep_learning_mlb_regress_test.h5')
+        # final_df_mean = DataFrame()
+        # final_df_median = DataFrame()
+        final_dict = {}
+        for abv in tqdm(sorted(self.teams_abv)):
+            # try:
+            print() #tqdm things
+            print(f'current team: {abv}, year: {2023}')
+            df_inst = web_scrape_mlb.get_data_team(abv,2023)
+            for col in df_inst.columns:
+                df_inst[col].replace('', np.nan, inplace=True)
+                df_inst[col] = df_inst[col].astype(float)
+            #Actual
+            df_inst.dropna(inplace=True)
+            game_result_series = df_inst['game_result']
+            df_inst.drop(columns=self.drop_cols_manual,inplace=True)
+            range_data = np.arange(2,25)
+            per_team_best_rolling_vals = []
+            
+            #iterate over every game 
+            num_iter = 0
+            for game in range(range_data[-1],len(df_inst)-1):
+                ground_truth = game_result_series.iloc[game+1]
+                dict_range_median = {}
+                for roll_val in range_data:
+                    data1_median = df_inst.iloc[0:game].rolling(roll_val).median()
+                    X_std_1 = self.scaler.transform(data1_median.iloc[-1:])
+                    X_pca_1 = self.pca.transform(X_std_1)
+                    team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                    prediction_median = model.predict(team_1_df2023.iloc[-1:])
+                    if prediction_median[0][0] > 0.5:
+                        result_median = 1
+                    else:
+                        result_median = 0
+                    if int(ground_truth) == result_median:
+                        range_median = 1
+                    else:
+                        range_median = 0
+                    dict_range_median[roll_val] = [range_median]
+                num_iter += 1
+                #extract keys that have a value of 1 
+                keys_with_value_one = [key for key, value in dict_range_median.items() if value == [1]]
+                per_team_best_rolling_vals.append(keys_with_value_one)
+            #remove empty sublists and combine into one list
+            merged_list = [item for sublist in per_team_best_rolling_vals if sublist for item in sublist]
+            print(f'Total number of games: {num_iter}')
+            plt.figure()
+            plt.hist(merged_list, bins=range(min(merged_list), max(merged_list)+2), rwidth=0.8, align='left')
+            plt.xlabel('Value')
+            plt.ylabel('Frequency')
+            plt.title(f'{abv} Histogram. total games: {num_iter}')
+            plt.xticks(range(min(merged_list), max(merged_list)+1))
+            for rect in plt.gca().patches:
+                x = rect.get_x() + rect.get_width() / 2
+                y = rect.get_height()
+                plt.gca().annotate(f'{round(y/num_iter,2)}', (x, y), ha='center', va='bottom')
+            plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_hist.png'),dpi=300)
+            plt.close()
+
+            #write best value to file
+            counter = Counter(merged_list)
+            most_frequent_value = counter.most_common(1)[0][0]
+            # best_value_dict = {f'{abv}': [most_frequent_value]}
+
+            # # Read existing data from the YAML file
+            # try:
+            #     final_df_median = read_csv('best_values.csv')
+            # except FileNotFoundError:
+            #     pass
+            # # Update existing data with new data
+            # final_df_median = concat([final_df_median, DataFrame(best_value_dict)])
+            # # Write the updated data to the YAML file
+            # final_df_median.to_csv('best_values.csv',index=False)
+            final_dict[abv] = int(most_frequent_value)
+        with open('best_values.yaml', 'w') as file:
+            yaml.dump(final_dict, file)
+            
+
 
     def run_analysis(self):
         if argv[1] == "test":
             self.get_teams()
             self.split()
-            self.test_ma()
+            # self.test_ma()
+            self.test_each_team()
         else:
             self.get_teams()
             self.split()
