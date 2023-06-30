@@ -323,21 +323,26 @@ class mlbDeep():
             team_2_pred = []
             team_1_pred_regress = []
             team_2_pred_regress = []
-            median_bool = True
+            # median_bool = True
             ma_range = [3]
+            #load best median rolling values
+            with open('best_values.yaml', 'r') as file:
+                best_values = yaml.safe_load(file)
+            print(f'rolling value for {self.team_1}: {int(best_values[self.team_1])}')
+            print(f'rolling value for {self.team_2}: {int(best_values[self.team_2])}')
             for ma in tqdm(ma_range):
-                if median_bool == True:
-                    data1_mean = team_1_df2023.rolling(ma).median()
-                    data2_mean = team_2_df2023.rolling(ma).median()
-                    #regress
-                    data1_mean_regress = team_1_df2023_regress.rolling(3).median()
-                    data2_mean_regress = team_2_df2023_regress.rolling(3).median()
-                else:
-                    data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
-                    data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
-                    #regress
-                    data1_mean_regress = team_1_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
-                    data2_mean_regress = team_2_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
+                # if median_bool == True:
+                data1_mean = team_1_df2023.rolling(int(best_values[self.team_1])).median()
+                data2_mean = team_2_df2023.rolling(int(best_values[self.team_2])).median()
+                #regress
+                data1_mean_regress = team_1_df2023_regress.rolling(3).median()
+                data2_mean_regress = team_2_df2023_regress.rolling(3).median()
+                # else:
+                #     data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                #     data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                #     #regress
+                #     data1_mean_regress = team_1_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
+                #     data2_mean_regress = team_2_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
 
                 # for cols in team_1_df2023.columns:
                     # # ['cli', 'inherited_runners', 'inherited_score']
