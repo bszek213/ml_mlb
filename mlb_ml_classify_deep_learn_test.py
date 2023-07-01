@@ -301,18 +301,18 @@ class mlbDeep():
             team_1_df2023_regress = team_1_df2023.drop(columns=['RS'])
             team_2_df2023_regress = team_2_df2023.drop(columns=['RS'])
             #PCA and standardize
-            X_std_1 = self.scaler.transform(team_1_df2023)
-            X_std_2 = self.scaler.transform(team_2_df2023) 
+            # X_std_1 = self.scaler.transform(team_1_df2023)
+            # X_std_2 = self.scaler.transform(team_2_df2023) 
             X_std_1_regress = self.scaler_regress.transform(team_1_df2023_regress)
             X_std_2_regress = self.scaler_regress.transform(team_2_df2023_regress) 
 
-            X_pca_1 = self.pca.transform(X_std_1)
-            X_pca_2 = self.pca.transform(X_std_2)
+            # X_pca_1 = self.pca.transform(X_std_1)
+            # X_pca_2 = self.pca.transform(X_std_2)
             X_pca_1_regress = self.pca_regress.transform(X_std_1_regress)
             X_pca_2_regress = self.pca_regress.transform(X_std_2_regress)
 
-            team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-            team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+            # team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+            # team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
             team_1_df2023_regress = DataFrame(X_pca_1_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
             team_2_df2023_regress = DataFrame(X_pca_2_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
     
@@ -332,8 +332,18 @@ class mlbDeep():
             print(f'rolling value for {self.team_2}: {int(best_values[self.team_2])}')
             for ma in tqdm(ma_range):
                 # if median_bool == True:
-                data1_mean = team_1_df2023.rolling(int(best_values[self.team_1])).median()
-                data2_mean = team_2_df2023.rolling(int(best_values[self.team_2])).median()
+                team_1_df2023 = team_1_df2023.rolling(int(best_values[self.team_1])).median()
+                team_2_df2023 = team_2_df2023.rolling(int(best_values[self.team_2])).median()
+                team_1_df2023 = team_1_df2023.iloc[-1:]
+                team_2_df2023 = team_2_df2023.iloc[-1:]
+
+                X_std_1 = self.scaler.transform(team_1_df2023)
+                X_std_2 = self.scaler.transform(team_2_df2023) 
+                X_pca_1 = self.pca.transform(X_std_1)
+                X_pca_2 = self.pca.transform(X_std_2)
+                data1_mean = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                data2_mean = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                print(data1_mean)
                 #regress
                 data1_mean_regress = team_1_df2023_regress.rolling(3).median()
                 data2_mean_regress = team_2_df2023_regress.rolling(3).median()
@@ -361,8 +371,8 @@ class mlbDeep():
                 #TEAM 1 Prediction
                 # x_new = self.scaler.transform(data1_mean.iloc[-1:])
                 # x_new2 = self.scaler.transform(data2_mean.iloc[-1:])
-                prediction = self.model.predict(data1_mean.iloc[-1:])
-                prediction2 = self.model.predict(data2_mean.iloc[-1:])
+                prediction = self.model.predict(data1_mean)
+                prediction2 = self.model.predict(data2_mean)
                 prediction_1_regress = self.model_regress.predict(data1_mean_regress.iloc[-1:])
                 prediction_2_regress = self.model_regress.predict(data2_mean_regress.iloc[-1:])
                 team_1_pred.append(prediction[0][0]*100)
