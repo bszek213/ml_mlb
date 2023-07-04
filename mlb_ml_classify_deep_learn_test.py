@@ -326,10 +326,8 @@ class mlbDeep():
             # median_bool = True
             ma_range = [3]
             #load best median rolling values
-            with open('best_values.yaml', 'r') as file:
+            with open('best_values_median.yaml', 'r') as file:
                 best_values = yaml.safe_load(file)
-            print(f'rolling value for {self.team_1}: {int(best_values[self.team_1])}')
-            print(f'rolling value for {self.team_2}: {int(best_values[self.team_2])}')
             for ma in tqdm(ma_range):
                 # if median_bool == True:
                 team_1_df2023 = team_1_df2023.rolling(int(best_values[self.team_1])).median()
@@ -343,7 +341,7 @@ class mlbDeep():
                 X_pca_2 = self.pca.transform(X_std_2)
                 data1_mean = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
                 data2_mean = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-                print(data1_mean)
+                # print(data1_mean)
                 #regress
                 data1_mean_regress = team_1_df2023_regress.rolling(3).median()
                 data2_mean_regress = team_2_df2023_regress.rolling(3).median()
@@ -383,6 +381,9 @@ class mlbDeep():
             self.save_outcomes_2 = team_2_pred
             # print(f'prediction {self.team_1}: {team_1_pred}%')
             # print(f'prediction {self.team_2}: {team_2_pred}%')
+            print('====================================')
+            print(f'rolling value for {self.team_1}: {int(best_values[self.team_1])}')
+            print(f'rolling value for {self.team_2}: {int(best_values[self.team_2])}')
             print('====================================')
             print('Classifier')
             print(f'{self.team_1} prediction: {self.save_outcomes_1}')
@@ -553,6 +554,8 @@ class mlbDeep():
         # final_df_mean = DataFrame()
         # final_df_median = DataFrame()
         final_dict = {}
+        final_dict_mean = {}
+        save_betting_teams = []
         for abv in tqdm(sorted(self.teams_abv)):
             # try:
             print() #tqdm things
@@ -565,20 +568,28 @@ class mlbDeep():
             df_inst.dropna(inplace=True)
             game_result_series = df_inst['game_result']
             df_inst.drop(columns=self.drop_cols_manual,inplace=True)
-            range_data = np.arange(2,25)
+            range_data = np.arange(2,30)
             per_team_best_rolling_vals = []
+            per_team_best_rolling_vals_mean = []
             
             #iterate over every game 
             num_iter = 0
             for game in range(range_data[-1],len(df_inst)-1):
                 ground_truth = game_result_series.iloc[game+1]
                 dict_range_median = {}
+                dict_range_mean = {}
                 for roll_val in range_data:
                     data1_median = df_inst.iloc[0:game].rolling(roll_val).median()
+                    data1_mean = df_inst.iloc[0:game].ewm(span=roll_val,min_periods=roll_val-1).mean()
                     X_std_1 = self.scaler.transform(data1_median.iloc[-1:])
+                    X_std_1_mean = self.scaler.transform(data1_mean.iloc[-1:])
                     X_pca_1 = self.pca.transform(X_std_1)
+                    X_pca_1_mean = self.pca.transform(X_std_1_mean)
                     team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                    team_1_df2023_mean = DataFrame(X_pca_1_mean, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
                     prediction_median = model.predict(team_1_df2023.iloc[-1:])
+                    prediction_mean = model.predict(team_1_df2023_mean.iloc[-1:])
+                    #median prediction
                     if prediction_median[0][0] > 0.5:
                         result_median = 1
                     else:
@@ -588,29 +599,63 @@ class mlbDeep():
                     else:
                         range_median = 0
                     dict_range_median[roll_val] = [range_median]
+                    #mean prediction
+                    if prediction_mean[0][0] > 0.5:
+                        result_mean = 1
+                    else:
+                        result_mean = 0
+                    if int(ground_truth) == result_mean:
+                        range_mean = 1
+                    else:
+                        range_mean = 0
+                    dict_range_mean[roll_val] = [range_mean]
                 num_iter += 1
                 #extract keys that have a value of 1 
                 keys_with_value_one = [key for key, value in dict_range_median.items() if value == [1]]
+                keys_with_value_one_mean = [key for key, value in dict_range_mean.items() if value == [1]]
                 per_team_best_rolling_vals.append(keys_with_value_one)
+                per_team_best_rolling_vals_mean.append(keys_with_value_one_mean)
             #remove empty sublists and combine into one list
             merged_list = [item for sublist in per_team_best_rolling_vals if sublist for item in sublist]
+            merged_list_mean = [item for sublist in per_team_best_rolling_vals_mean if sublist for item in sublist]
             print(f'Total number of games: {num_iter}')
+            #Plot median
             plt.figure(figsize=[10,5])
             plt.hist(merged_list, bins=range(min(merged_list), max(merged_list)+2), rwidth=0.8, align='left')
             plt.xlabel('Value')
             plt.ylabel('Frequency')
-            plt.title(f'{abv} Histogram. total games: {num_iter}')
+            plt.title(f'{abv} Histogram Median. total games: {num_iter}')
             plt.xticks(range(min(merged_list), max(merged_list)+1))
             for rect in plt.gca().patches:
                 x = rect.get_x() + rect.get_width() / 2
                 y = rect.get_height()
-                plt.gca().annotate(f'{round(y/num_iter,2)}', (x, y), ha='center', va='bottom')
-            plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_hist.png'),dpi=300)
+                prop = round(y/num_iter,2)
+                if prop >= 0.7:
+                    save_betting_teams.append(abv)
+                plt.gca().annotate(f'{prop}', (x, y), ha='center', va='bottom')
+            plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_median_hist.png'),dpi=300)
             plt.close()
 
-            #write best value to file
+            #Plot mean
+            plt.figure(figsize=[10,5])
+            plt.hist(merged_list_mean, bins=range(min(merged_list_mean), max(merged_list_mean)+2), rwidth=0.8, align='left')
+            plt.xlabel('Value')
+            plt.ylabel('Frequency')
+            plt.title(f'{abv} Histogram EWM. total games: {num_iter}')
+            plt.xticks(range(min(merged_list_mean), max(merged_list_mean)+1))
+            for rect in plt.gca().patches:
+                x = rect.get_x() + rect.get_width() / 2
+                y = rect.get_height()
+                plt.gca().annotate(f'{round(y/num_iter,2)}', (x, y), ha='center', va='bottom')
+            plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_EWM_hist.png'),dpi=300)
+            plt.close()
+
+            #write best value to file - median
             counter = Counter(merged_list)
-            most_frequent_value = counter.most_common(1)[0][0]
+            most_frequent_value_median = counter.most_common(1)[0][0]
+            #write best value to file - EWM
+            counter = Counter(merged_list_mean)
+            most_frequent_value_mean = counter.most_common(1)[0][0]
             # best_value_dict = {f'{abv}': [most_frequent_value]}
 
             # # Read existing data from the YAML file
@@ -622,11 +667,17 @@ class mlbDeep():
             # final_df_median = concat([final_df_median, DataFrame(best_value_dict)])
             # # Write the updated data to the YAML file
             # final_df_median.to_csv('best_values.csv',index=False)
-            final_dict[abv] = int(most_frequent_value)
-        with open('best_values.yaml', 'w') as file:
+            final_dict[abv] = int(most_frequent_value_median)
+            final_dict_mean[abv] = int(most_frequent_value_mean)
+        with open('best_values_median.yaml', 'w') as file:
             yaml.dump(final_dict, file)
-            
-
+        with open('best_values_mean.yaml', 'w') as file:
+            yaml.dump(final_dict, file)
+        #Remove any duplicates from list
+        save_betting_teams = list(set(save_betting_teams))
+        with open("betting_teams.txt", "w") as file:
+            for item in save_betting_teams:
+                file.write(item + "\n")
 
     def run_analysis(self):
         if argv[1] == "test":
