@@ -2,9 +2,7 @@
 
 Machine learning that predicts the outcomes of any MLB game. Data are from 2018 - 2022 seasons. 
 Current accuracy on test data:
-- mean running average of 5 games has a test accuracy of 70%
-- median running average of 2 games has a test accuracy of 73%
-- Teams that I have a >70% prediction probability: ATL, KCR, OAK, PHI
+- Teams that I have a >70% prediction probability: 'KCR', 'OAK', 'ATL', 'CHW'
 
 ## Usage
 

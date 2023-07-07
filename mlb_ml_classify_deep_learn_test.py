@@ -568,7 +568,7 @@ class mlbDeep():
             df_inst.dropna(inplace=True)
             game_result_series = df_inst['game_result']
             df_inst.drop(columns=self.drop_cols_manual,inplace=True)
-            range_data = np.arange(2,30)
+            range_data = np.arange(2,40)
             per_team_best_rolling_vals = []
             per_team_best_rolling_vals_mean = []
             
@@ -675,6 +675,7 @@ class mlbDeep():
             yaml.dump(final_dict, file)
         #Remove any duplicates from list
         save_betting_teams = list(set(save_betting_teams))
+        print(f'teams that have the highest predictability: {save_betting_teams}')
         with open("betting_teams.txt", "w") as file:
             for item in save_betting_teams:
                 file.write(item + "\n")
