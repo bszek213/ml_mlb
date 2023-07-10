@@ -41,6 +41,7 @@ TODO: 1. When the model accruacy is below 30% use the opposite outcome of the mo
 What I have learned:
 1. Perform Standardization before PCA
 2. Performing Standardization and PCA before rolling mean/median is worse than running it after rolling mean/median
+3. mode as a way of creating future data does not work.
 """
 
 class mlbDeep():
@@ -564,6 +565,7 @@ class mlbDeep():
         final_dict = {}
         final_dict_mean = {}
         save_betting_teams = []
+        save_betting_teams_opposite = []
         
         #delete all previous .pngs
         folder_path = os.path.join(os.getcwd(),'histogram_teams')
@@ -637,7 +639,7 @@ class mlbDeep():
             merged_list_mean = [item for sublist in per_team_best_rolling_vals_mean if sublist for item in sublist]
             print(f'Total number of games: {num_iter}')
             #Plot median
-            plt.figure(figsize=[10,5])
+            plt.figure(figsize=[15,5])
             plt.hist(merged_list, bins=range(min(merged_list), max(merged_list)+2), rwidth=0.8, align='left')
             plt.xlabel('Value')
             plt.ylabel('Frequency')
@@ -649,12 +651,12 @@ class mlbDeep():
                 prop = round(y/num_iter,2)
                 if prop >= 0.7:
                     save_betting_teams.append(abv)
-                plt.gca().annotate(f'{prop}', (x, y), ha='center', va='bottom')
+                plt.gca().annotate(f'{prop}', (x, y), ha='center', va='bottom',fontsize=8)
             plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_median_hist.png'),dpi=300)
             plt.close()
 
             #Plot mean
-            plt.figure(figsize=[10,5])
+            plt.figure(figsize=[15,5])
             plt.hist(merged_list_mean, bins=range(min(merged_list_mean), max(merged_list_mean)+2), rwidth=0.8, align='left')
             plt.xlabel('Value')
             plt.ylabel('Frequency')
@@ -663,7 +665,7 @@ class mlbDeep():
             for rect in plt.gca().patches:
                 x = rect.get_x() + rect.get_width() / 2
                 y = rect.get_height()
-                plt.gca().annotate(f'{round(y/num_iter,2)}', (x, y), ha='center', va='bottom')
+                plt.gca().annotate(f'{round(y/num_iter,2)}', (x, y), ha='center', va='bottom',fontsize=8)
             plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_EWM_hist.png'),dpi=300)
             plt.close()
 
@@ -725,16 +727,13 @@ class mlbDeep():
             X_std_1 = self.scaler.transform(df_inst)
             X_pca_1 = self.pca.transform(X_std_1)
             team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-
             #iterate over every game 
             num_iter = 0
             for game in range(range_data[-1],len(df_inst)-1):
                 ground_truth = game_result_series.iloc[game+1]
                 dict_range_median = {}
-                dict_range_mean = {}
                 for roll_val in range_data:
-                    data1_median = team_1_df2023.iloc[0:game].rolling(roll_val).median()
-                    data1_mean = team_1_df2023.iloc[0:game].ewm(span=roll_val,min_periods=roll_val-1).mean()
+                    data1_median = team_1_df2023.iloc[0:game].round(2).mode(numeric_only=True, dropna=True).dropna()
 
                     # X_std_1 = self.scaler.transform(data1_median.iloc[-1:])
                     # X_std_1_mean = self.scaler.transform(data1_mean.iloc[-1:])
@@ -744,7 +743,6 @@ class mlbDeep():
                     # team_1_df2023_mean = DataFrame(X_pca_1_mean, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
                     
                     prediction_median = model.predict(data1_median.iloc[-1:])
-                    prediction_mean = model.predict(data1_mean.iloc[-1:])
                     #median prediction
                     if prediction_median[0][0] > 0.5:
                         result_median = 1
@@ -756,31 +754,19 @@ class mlbDeep():
                         range_median = 0
                     dict_range_median[roll_val] = [range_median]
                     #mean prediction
-                    if prediction_mean[0][0] > 0.5:
-                        result_mean = 1
-                    else:
-                        result_mean = 0
-                    if int(ground_truth) == result_mean:
-                        range_mean = 1
-                    else:
-                        range_mean = 0
-                    dict_range_mean[roll_val] = [range_mean]
                 num_iter += 1
                 #extract keys that have a value of 1 
                 keys_with_value_one = [key for key, value in dict_range_median.items() if value == [1]]
-                keys_with_value_one_mean = [key for key, value in dict_range_mean.items() if value == [1]]
                 per_team_best_rolling_vals.append(keys_with_value_one)
-                per_team_best_rolling_vals_mean.append(keys_with_value_one_mean)
             #remove empty sublists and combine into one list
             merged_list = [item for sublist in per_team_best_rolling_vals if sublist for item in sublist]
-            merged_list_mean = [item for sublist in per_team_best_rolling_vals_mean if sublist for item in sublist]
             print(f'Total number of games: {num_iter}')
             #Plot median
             plt.figure(figsize=[10,5])
             plt.hist(merged_list, bins=range(min(merged_list), max(merged_list)+2), rwidth=0.8, align='left')
             plt.xlabel('Value')
             plt.ylabel('Frequency')
-            plt.title(f'{abv} Histogram Median. total games: {num_iter}')
+            plt.title(f'{abv} Histogram Mode. total games: {num_iter}')
             plt.xticks(range(min(merged_list), max(merged_list)+1))
             for rect in plt.gca().patches:
                 x = rect.get_x() + rect.get_width() / 2
@@ -789,57 +775,28 @@ class mlbDeep():
                 if prop >= 0.7:
                     save_betting_teams.append(abv)
                 plt.gca().annotate(f'{prop}', (x, y), ha='center', va='bottom')
-            plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_median_hist_test.png'),dpi=300)
-            plt.close()
-
-            #Plot mean
-            plt.figure(figsize=[10,5])
-            plt.hist(merged_list_mean, bins=range(min(merged_list_mean), max(merged_list_mean)+2), rwidth=0.8, align='left')
-            plt.xlabel('Value')
-            plt.ylabel('Frequency')
-            plt.title(f'{abv} Histogram EWM. total games: {num_iter}')
-            plt.xticks(range(min(merged_list_mean), max(merged_list_mean)+1))
-            for rect in plt.gca().patches:
-                x = rect.get_x() + rect.get_width() / 2
-                y = rect.get_height()
-                plt.gca().annotate(f'{round(y/num_iter,2)}', (x, y), ha='center', va='bottom')
-            plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_EWM_hist_test.png'),dpi=300)
+            plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_mode_hist_test.png'),dpi=300)
             plt.close()
 
             #write best value to file - median
             counter = Counter(merged_list)
             most_frequent_value_median = counter.most_common(1)[0][0]
-            #write best value to file - EWM
-            counter = Counter(merged_list_mean)
-            most_frequent_value_mean = counter.most_common(1)[0][0]
-            # best_value_dict = {f'{abv}': [most_frequent_value]}
 
-            # # Read existing data from the YAML file
-            # try:
-            #     final_df_median = read_csv('best_values.csv')
-            # except FileNotFoundError:
-            #     pass
-            # # Update existing data with new data
-            # final_df_median = concat([final_df_median, DataFrame(best_value_dict)])
-            # # Write the updated data to the YAML file
-            # final_df_median.to_csv('best_values.csv',index=False)
             final_dict[abv] = int(most_frequent_value_median)
-            final_dict_mean[abv] = int(most_frequent_value_mean)
-        with open('best_values_median_test.yaml', 'w') as file:
-            yaml.dump(final_dict, file)
-        with open('best_values_mean_test.yaml', 'w') as file:
+        with open('best_values_mode_test.yaml', 'w') as file:
             yaml.dump(final_dict, file)
         #Remove any duplicates from list
         save_betting_teams = list(set(save_betting_teams))
         print(f'teams that have the highest predictability: {save_betting_teams}')
-        with open("betting_teams.txt", "w") as file:
-            for item in save_betting_teams:
-                file.write(item + "\n")
+        # with open("betting_teams.txt", "w") as file:
+        #     for item in save_betting_teams:
+        #         file.write(item + "\n")
     def run_analysis(self):
         if argv[1] == "test":
             self.get_teams()
             self.split()
             # self.test_ma()
+            # self.test_each_team_classify_test()
             self.test_each_team_classify()
         else:
             self.get_teams()
