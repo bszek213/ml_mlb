@@ -32,9 +32,9 @@ import os
 import yaml
 from collections import Counter
 # from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tsa.vector_ar.var_model import VAR
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF
+# from statsmodels.tsa.vector_ar.var_model import VAR
+# import xgboost as xgb
+from sklearn.ensemble import RandomForestRegressor
 # Ignore the warning
 warnings.filterwarnings("ignore")
 
@@ -45,6 +45,7 @@ What I have learned:
 1. Perform Standardization before PCA
 2. Performing Standardization and PCA before rolling mean/median is worse than running it after rolling mean/median
 3. mode as a way of creating future data does not work.
+4. new methods of forecasting the features for future games: VAR=50% acc, XGBoost=50% acc, RandomForest=63% acc
 """
 
 class mlbDeep():
@@ -716,9 +717,35 @@ class mlbDeep():
             if filename.lower().endswith(".png") and os.path.isfile(file_path):
                 # Delete the file
                 os.remove(file_path)
+
+        # Separate odd and even rows
+        x_train = self.x_data.iloc[::2]  # Odd rows
+        x_test = self.x_data.iloc[1::2]  # Even rows
+
+        # param_grid = {
+        #     'n_estimators': [300, 400, 500],
+        #     'max_depth': [None, 5, 10, 20],
+        #     'min_samples_split': [2, 5, 10],
+        #     'min_samples_leaf': [1, 2, 4],
+        # }
+        # # Train the XGBoost model
+        # # Create the GridSearchCV object
+        # grid_search = GridSearchCV(estimator=RandomForestRegressor(), param_grid=param_grid, cv=5, n_jobs=10, verbose=2)
+
+        # # Fit the GridSearchCV object to the training data
+        # grid_search.fit(x_train, x_test)
+
+        # # Print the best parameters and best score
+        # print("Best Parameters: ", grid_search.best_params_)
+        # print("Best Score: ", grid_search.best_score_)
+        params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
+        xgb_model = RandomForestRegressor(**params_grid)
+        xgb_model.fit(x_train, x_test)  # Assuming you have corresponding target values `y_train`
+        # Forecast the next game's features
+                # Define the XGBoost model
         count_teams = 1
         for abv in tqdm(sorted(self.teams_abv)):
-            # try:
+        #     # try:
             print() #tqdm things
             print(f'current team: {abv}, year: {2023}')
             df_inst = web_scrape_mlb.get_data_team(abv,2023)
@@ -729,15 +756,17 @@ class mlbDeep():
             df_inst.dropna(inplace=True)
             game_result_series = df_inst['game_result']
             df_inst.drop(columns=self.drop_cols_manual,inplace=True)
-            range_data = np.arange(2,40)
-            per_team_best_rolling_vals = []
-            per_team_best_rolling_vals_mean = []
+        #     range_data = np.arange(2,40)
+        #     per_team_best_rolling_vals = []
+        #     per_team_best_rolling_vals_mean = []
 
-            #use ARIMA to estimate the next game values
-            df_forecast = self.forecast_features(df_inst.iloc[:-1])
+        #     #use ARIMA to estimate the next game values
+            df_forecast = self.forecast_features(df_inst)
             ground_truth = game_result_series.iloc[-1]
+            next_game_features = xgb_model.predict(df_forecast[0])
+            print(next_game_features)
             #predict
-            prediction_median = model.predict(df_forecast)
+            prediction_median = model.predict(next_game_features)
             if prediction_median[0][0] > 0.5:
                 result_median = 1
             else:
@@ -874,15 +903,14 @@ class mlbDeep():
         X_std_1 = self.scaler.transform(game_data)
         X_pca_1 = self.pca.transform(X_std_1)
         team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-        # Train a VAR model
-        model = VAR(team_1_df2023)
-        model_fit = model.fit()
-        # print(model_fit.summary())
-        # Forecast feature values for the next game
-        next_game_features = model_fit.forecast(model_fit.endog, steps=1)
-        next_game_features = next_game_features[0] 
-        team_df_forecast = DataFrame(np.array(next_game_features).reshape(1,self.pca.n_components_), columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-
+        # # Train a VAR model
+        # model = VAR(team_1_df2023)
+        # model_fit = model.fit()
+        # # Forecast feature values for the next game
+        # next_game_features = model_fit.forecast(model_fit.endog, steps=1)
+        # next_game_features = next_game_features[0] 
+        # team_df_forecast = DataFrame(np.array(next_game_features).reshape(1,self.pca.n_components_), columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+        team_df_forecast = team_1_df2023.iloc[-1:]
         return team_df_forecast
 
     def run_analysis(self):
@@ -890,8 +918,8 @@ class mlbDeep():
             self.get_teams()
             self.split()
             # self.test_ma()
-            # self.test_each_team_classify_test()
-            self.test_each_team_classify()
+            self.test_each_team_classify_test()
+            # self.test_each_team_classify()
         else:
             self.get_teams()
             self.split()
