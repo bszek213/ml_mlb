@@ -35,6 +35,7 @@ from collections import Counter
 # from statsmodels.tsa.vector_ar.var_model import VAR
 # import xgboost as xgb
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.neighbors import RadiusNeighborsRegressor
 # Ignore the warning
 warnings.filterwarnings("ignore")
 
@@ -45,7 +46,9 @@ What I have learned:
 1. Perform Standardization before PCA
 2. Performing Standardization and PCA before rolling mean/median is worse than running it after rolling mean/median
 3. mode as a way of creating future data does not work.
-4. new methods of forecasting the features for future games: VAR=50% acc, XGBoost=50% acc, RandomForest=63% acc
+4. new methods of forecasting the features for future games: 
+VAR=50% acc, XGBoost=50% acc, RandomForest=63% acc, LinearRegression=53% acc, MLP=50% acc, KNeighestNeighbors= 57% acc
+RidgeCV= 50% acc, Ridge= 50% acc, DecisionTree= 60% acc
 """
 
 class mlbDeep():
@@ -738,9 +741,14 @@ class mlbDeep():
         # # Print the best parameters and best score
         # print("Best Parameters: ", grid_search.best_params_)
         # print("Best Score: ", grid_search.best_score_)
-        params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
-        xgb_model = RandomForestRegressor(**params_grid)
-        xgb_model.fit(x_train, x_test)  # Assuming you have corresponding target values `y_train`
+
+        #PARAMETERIZED RANDOM FOREST REGRESSION
+        # params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
+        # xgb_model = RandomForestRegressor(**params_grid)
+        # xgb_model.fit(x_train, x_test)  # Assuming you have corresponding target values `y_train`
+
+        #LINEAR REGRESSION
+        xgb_model = RadiusNeighborsRegressor().fit(x_train, x_test)
         # Forecast the next game's features
                 # Define the XGBoost model
         count_teams = 1
@@ -763,7 +771,7 @@ class mlbDeep():
         #     #use ARIMA to estimate the next game values
             df_forecast = self.forecast_features(df_inst)
             ground_truth = game_result_series.iloc[-1]
-            next_game_features = xgb_model.predict(df_forecast[0])
+            next_game_features = xgb_model.predict(df_forecast)
             print(next_game_features)
             #predict
             prediction_median = model.predict(next_game_features)
@@ -782,11 +790,6 @@ class mlbDeep():
             print(f'Accuracy out of {count_teams} teams: {sum(save_betting_teams) / count_teams}')
             print('=======================================')
             count_teams += 1
-            
-            
-
-
-
 
 
         #     #predict games
@@ -918,8 +921,8 @@ class mlbDeep():
             self.get_teams()
             self.split()
             # self.test_ma()
-            self.test_each_team_classify_test()
-            # self.test_each_team_classify()
+            # self.test_each_team_classify_test()
+            self.test_each_team_classify()
         else:
             self.get_teams()
             self.split()
