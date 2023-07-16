@@ -31,6 +31,7 @@ import warnings
 import os
 import yaml
 from collections import Counter
+import pickle
 # from statsmodels.tsa.arima.model import ARIMA
 # from statsmodels.tsa.vector_ar.var_model import VAR
 # import xgboost as xgb
@@ -62,7 +63,7 @@ class mlbDeep():
         #     self.RandForRegressor=joblib.load("./randomForestModelTuned.joblib")
     def get_teams(self):
         year_list_find = []
-        year_list = [2017,2018,2019,2020,2021,2022,2023] #
+        year_list = [2014,2015,2016,2017,2018,2019,2020,2021,2022,2023] #
         if exists(join(getcwd(),'year_count.yaml')):
             with open(join(getcwd(),'year_count.yaml')) as file:
                 year_counts = yaml.load(file, Loader=yaml.FullLoader)
@@ -226,7 +227,7 @@ class mlbDeep():
             tensorboard_callback = TensorBoard(log_dir="./logs")
             early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
             self.model.fit(self.x_train,self.y_train,epochs=500, batch_size=128, verbose=0,
-                                    validation_data=(self.x_test,self.y_test),callbacks=[tensorboard_callback]) 
+                                    validation_data=(self.x_test,self.y_test),callbacks=[tensorboard_callback,early_stop]) 
             self.model.save('deep_learning_mlb_class_test.h5')
 
     def deep_learn_regress(self):
@@ -276,7 +277,7 @@ class mlbDeep():
             tensorboard_callback = TensorBoard(log_dir="./logs")
             early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
             self.model_regress.fit(self.x_train_regress,self.y_train_regress,epochs=500, batch_size=128, verbose=0,
-                                    validation_data=(self.x_test_regress,self.y_test_regress),callbacks=[tensorboard_callback]) 
+                                    validation_data=(self.x_test_regress,self.y_test_regress),callbacks=[tensorboard_callback,early_stop]) 
             self.model_regress.save('deep_learning_mlb_regress_test.h5')
 
     def predict_two_teams(self):
@@ -300,8 +301,8 @@ class mlbDeep():
             #Remove Game Result add game location
             team_1_df2023.drop(columns=self.drop_cols_manual,inplace=True)
             team_2_df2023.drop(columns=self.drop_cols_manual,inplace=True)
-            team_1_df2023.loc[-1,'game_location'] = self.game_loc_team1
-            team_2_df2023.loc[-1,'game_location'] = self.game_loc_team2
+            team_1_df2023.loc[team_1_df2023.index[-1],'game_location'] = self.game_loc_team1
+            team_2_df2023.loc[team_2_df2023.index[-1],'game_location'] = self.game_loc_team2
             #Drop the correlated features
             # team_1_df2023.drop(columns=self.drop_cols, inplace=True)
             # team_2_df2023.drop(columns=self.drop_cols, inplace=True)
@@ -346,13 +347,13 @@ class mlbDeep():
                 best_values = yaml.safe_load(file)
             for ma in tqdm(ma_range):
                 # if median_bool == True:
-                team_1_df2023 = team_1_df2023.rolling(int(best_values[self.team_1])).median()
-                team_2_df2023 = team_2_df2023.rolling(int(best_values[self.team_2])).median()
-                team_1_df2023 = team_1_df2023.iloc[-1:]
-                team_2_df2023 = team_2_df2023.iloc[-1:]
+                team_1_df2023_roll = team_1_df2023.rolling(int(best_values[self.team_1])).median()
+                team_2_df2023_roll = team_2_df2023.rolling(int(best_values[self.team_2])).median()
+                team_1_df2023_roll = team_1_df2023_roll.iloc[-1:]
+                team_2_df2023_roll = team_2_df2023_roll.iloc[-1:]
 
-                X_std_1 = self.scaler.transform(team_1_df2023)
-                X_std_2 = self.scaler.transform(team_2_df2023) 
+                X_std_1 = self.scaler.transform(team_1_df2023_roll)
+                X_std_2 = self.scaler.transform(team_2_df2023_roll) 
                 X_pca_1 = self.pca.transform(X_std_1)
                 X_pca_2 = self.pca.transform(X_std_2)
                 data1_mean = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
@@ -397,6 +398,15 @@ class mlbDeep():
             self.save_outcomes_2 = team_2_pred
             # print(f'prediction {self.team_1}: {team_1_pred}%')
             # print(f'prediction {self.team_2}: {team_2_pred}%')
+
+            #Use random forest to predict future game outcomes
+            # Load the model from file
+            with open('random_forest_model.pkl', 'rb') as file:
+                rf_model = pickle.load(file)
+            forecast_team_1 = self.forecast_features(team_1_df2023)
+            forecast_team_2 = self.forecast_features(team_2_df2023)
+            prediction_team_1 = self.model.predict(rf_model.predict(forecast_team_1))
+            prediction_team_2 = self.model.predict(rf_model.predict(forecast_team_2))
             print('====================================')
             print(f'rolling value for {self.team_1}: {int(best_values[self.team_1])}')
             print(f'rolling value for {self.team_2}: {int(best_values[self.team_2])}')
@@ -408,6 +418,10 @@ class mlbDeep():
             print('Regressor')
             print(f'{self.team_1} Predicted Scores: {team_1_pred_regress}')
             print(f'{self.team_2} Predicted Scores: {team_2_pred_regress}')
+            print('====================================')
+            print('Classifier and Random Forest on Feature Forecasting')
+            print(f'{self.team_1} Predicted Winning Probability: {prediction_team_1[0][0]*100}%')
+            print(f'{self.team_2} Predicted Winning Probability: {prediction_team_2[0][0]*100}%')
             print('====================================')
             if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
                 print('Game will be close.')
@@ -606,7 +620,13 @@ class mlbDeep():
                 dict_range_mean = {}
                 for roll_val in range_data:
                     data1_median = df_inst.iloc[0:game].rolling(roll_val).median()
+                    data1_median.loc[data1_median.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
                     data1_mean = df_inst.iloc[0:game].ewm(span=roll_val,min_periods=roll_val-1).mean()
+                    data1_mean.loc[data1_mean.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
+                    # print(data1_median)
+                    # print('==============')
+                    # print(data1_mean)
+                    #apply standardization and PCA
                     X_std_1 = self.scaler.transform(data1_median.iloc[-1:])
                     X_std_1_mean = self.scaler.transform(data1_mean.iloc[-1:])
                     X_pca_1 = self.pca.transform(X_std_1)
@@ -713,17 +733,17 @@ class mlbDeep():
         save_betting_teams = []
         
         #delete all previous .pngs
-        folder_path = os.path.join(os.getcwd(),'histogram_teams')
-        for filename in os.listdir(folder_path):
-            file_path = os.path.join(folder_path, filename)
-            # Check if the file is a PNG image
-            if filename.lower().endswith(".png") and os.path.isfile(file_path):
-                # Delete the file
-                os.remove(file_path)
+        # folder_path = os.path.join(os.getcwd(),'histogram_teams')
+        # for filename in os.listdir(folder_path):
+        #     file_path = os.path.join(folder_path, filename)
+        #     # Check if the file is a PNG image
+        #     if filename.lower().endswith(".png") and os.path.isfile(file_path):
+        #         # Delete the file
+        #         os.remove(file_path)
 
         # Separate odd and even rows
         x_train = self.x_data.iloc[::2]  # Odd rows
-        x_test = self.x_data.iloc[1::2]  # Even rows
+        y_train = self.x_data.iloc[1::2]  # Even rows
 
         # param_grid = {
         #     'n_estimators': [300, 400, 500],
@@ -743,12 +763,15 @@ class mlbDeep():
         # print("Best Score: ", grid_search.best_score_)
 
         #PARAMETERIZED RANDOM FOREST REGRESSION
-        # params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
-        # xgb_model = RandomForestRegressor(**params_grid)
-        # xgb_model.fit(x_train, x_test)  # Assuming you have corresponding target values `y_train`
+        params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
+        xgb_model = RandomForestRegressor(**params_grid)
+        xgb_model.fit(x_train, y_train)  # Assuming you have corresponding target values `y_train`
 
+        # Save the model to a file
+        with open('random_forest_model.pkl', 'wb') as file:
+            pickle.dump(xgb_model, file)
         #LINEAR REGRESSION
-        xgb_model = RadiusNeighborsRegressor().fit(x_train, x_test)
+        # xgb_model = RadiusNeighborsRegressor().fit(x_train, x_test)
         # Forecast the next game's features
                 # Define the XGBoost model
         count_teams = 1
@@ -921,8 +944,8 @@ class mlbDeep():
             self.get_teams()
             self.split()
             # self.test_ma()
-            # self.test_each_team_classify_test()
-            self.test_each_team_classify()
+            self.test_each_team_classify_test()
+            # self.test_each_team_classify()
         else:
             self.get_teams()
             self.split()

@@ -1,8 +1,9 @@
 # MLB Game Predictions
 
-Machine learning that predicts the outcomes of any MLB game. Data are from 2018 - 2022 seasons. 
+Machine learning that predicts the outcomes of any MLB game. Data are from 2014 - 2023 seasons. 
 Current accuracy on test data:
-- Teams that I have a >70% prediction probability: 'KCR', 'OAK', 'ATL', 'CHW'
+- Teams that I have a >70% prediction probability: 'OAK', 'ATL'
+- Regression DNN has a validation MSE of 0.3295
 
 ## Usage
 
@@ -14,12 +15,12 @@ python mlb_ml_classify_deep_learn.py test
 
 ```bash
 Correlated features   >= 0.90: ['RBI', 'onbase_plus_slugging', 'ER', 'strikes_total']
-Number of samples: 28248
+Number of samples: 43408
 
 ### Current prediction accuracies - DNN
 Validation Accuracy: 0.985
 Train Accuracy: 0.986
-Validation Loss: 0.04
+Validation Loss: 0.03
 Train Loss: 0.037
 ```
 

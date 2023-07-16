@@ -224,6 +224,7 @@ def get_data_team(team,year):
     cli = []
     RA = []
     RS = []
+    win_loss_streak = []
     for trb in tr_body:
         for td in trb.find_all('td'):
             if td.get('data-stat') == 'rank':
@@ -234,6 +235,10 @@ def get_data_team(team,year):
                 RA.append(td.get_text())
             if td.get('data-stat') == 'R':
                 RS.append(td.get_text())
+            if td.get('data-stat') == 'win_loss_streak':
+                count = len(td.get_text())
+                value = -count if "-" in td.get_text() else count
+                win_loss_streak.append(value)
     # dict_val = {"game_result":game_result,
     #                   "PA":PA,
     #                   "AB":AB,
@@ -347,6 +352,7 @@ def get_data_team(team,year):
                       "pitchers_number":pitchers_number,
                       "game_location":team_homeORaway,
                       'rank':rank,
+                      "win_loss_streak":win_loss_streak
                     #   "cli":cli
     })
 # get_data_team('NYY',2022)
