@@ -763,13 +763,16 @@ class mlbDeep():
         # print("Best Score: ", grid_search.best_score_)
 
         #PARAMETERIZED RANDOM FOREST REGRESSION
-        params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
-        xgb_model = RandomForestRegressor(**params_grid)
-        xgb_model.fit(x_train, y_train)  # Assuming you have corresponding target values `y_train`
-
-        # Save the model to a file
-        with open('random_forest_model.pkl', 'wb') as file:
-            pickle.dump(xgb_model, file)
+        if not os.path.exists('random_forest_model.pkl'):
+            params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
+            xgb_model = RandomForestRegressor(**params_grid)
+            xgb_model.fit(x_train, y_train)  # Assuming you have corresponding target values `y_train`
+            # Save the model to a file
+            with open('random_forest_model.pkl', 'wb') as file:
+                pickle.dump(xgb_model, file)
+        else:
+            with open('random_forest_model.pkl', 'rb') as file:
+                xgb_model = pickle.load(file)
         #LINEAR REGRESSION
         # xgb_model = RadiusNeighborsRegressor().fit(x_train, x_test)
         # Forecast the next game's features
