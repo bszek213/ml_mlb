@@ -2,7 +2,7 @@
 
 Machine learning that predicts the outcomes of any MLB game. Data are from 2014 - 2023 seasons. 
 Current accuracy on test data:
-- Teams that I have a >70% prediction probability: 'OAK', 'ATL'
+- Teams that I have a >70% prediction probability: 'KCR', 'OAK', 'ATL'
 - Regression DNN has a validation MSE of 0.3295
 
 ## Usage

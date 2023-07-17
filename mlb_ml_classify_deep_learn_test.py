@@ -63,7 +63,7 @@ class mlbDeep():
         #     self.RandForRegressor=joblib.load("./randomForestModelTuned.joblib")
     def get_teams(self):
         year_list_find = []
-        year_list = [2014,2015,2016,2017,2018,2019,2020,2021,2022,2023] #
+        year_list = np.arange(2010,2024,1).tolist()
         if exists(join(getcwd(),'year_count.yaml')):
             with open(join(getcwd(),'year_count.yaml')) as file:
                 year_counts = yaml.load(file, Loader=yaml.FullLoader)
@@ -301,8 +301,8 @@ class mlbDeep():
             #Remove Game Result add game location
             team_1_df2023.drop(columns=self.drop_cols_manual,inplace=True)
             team_2_df2023.drop(columns=self.drop_cols_manual,inplace=True)
-            team_1_df2023.loc[team_1_df2023.index[-1],'game_location'] = self.game_loc_team1
-            team_2_df2023.loc[team_2_df2023.index[-1],'game_location'] = self.game_loc_team2
+            # team_1_df2023.loc[team_1_df2023.index[-1],'game_location'] = self.game_loc_team1
+            # team_2_df2023.loc[team_2_df2023.index[-1],'game_location'] = self.game_loc_team2
             #Drop the correlated features
             # team_1_df2023.drop(columns=self.drop_cols, inplace=True)
             # team_2_df2023.drop(columns=self.drop_cols, inplace=True)
@@ -403,8 +403,8 @@ class mlbDeep():
             # Load the model from file
             with open('random_forest_model.pkl', 'rb') as file:
                 rf_model = pickle.load(file)
-            forecast_team_1 = self.forecast_features(team_1_df2023)
-            forecast_team_2 = self.forecast_features(team_2_df2023)
+            forecast_team_1, _ = self.forecast_features(team_1_df2023)
+            forecast_team_2, _ = self.forecast_features(team_2_df2023)
             prediction_team_1 = self.model.predict(rf_model.predict(forecast_team_1))
             prediction_team_2 = self.model.predict(rf_model.predict(forecast_team_2))
             print('====================================')
@@ -420,8 +420,8 @@ class mlbDeep():
             print(f'{self.team_2} Predicted Scores: {team_2_pred_regress}')
             print('====================================')
             print('Classifier and Random Forest on Feature Forecasting')
-            print(f'{self.team_1} Predicted Winning Probability: {prediction_team_1[0][0]*100}%')
-            print(f'{self.team_2} Predicted Winning Probability: {prediction_team_2[0][0]*100}%')
+            print(f'{self.team_1} Predicted Winning Probability: {round(prediction_team_1[0][0]*100,2)}%')
+            print(f'{self.team_2} Predicted Winning Probability: {round(prediction_team_2[0][0]*100,2)}%')
             print('====================================')
             if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
                 print('Game will be close.')
@@ -620,9 +620,9 @@ class mlbDeep():
                 dict_range_mean = {}
                 for roll_val in range_data:
                     data1_median = df_inst.iloc[0:game].rolling(roll_val).median()
-                    data1_median.loc[data1_median.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
+                    # data1_median.loc[data1_median.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
                     data1_mean = df_inst.iloc[0:game].ewm(span=roll_val,min_periods=roll_val-1).mean()
-                    data1_mean.loc[data1_mean.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
+                    # data1_mean.loc[data1_mean.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
                     # print(data1_median)
                     # print('==============')
                     # print(data1_mean)
@@ -745,6 +745,12 @@ class mlbDeep():
         x_train = self.x_data.iloc[::2]  # Odd rows
         y_train = self.x_data.iloc[1::2]  # Even rows
 
+        # # Adjust lengths if necessary
+        # if len(x_train) > len(y_train):
+        #     x_train = x_train[:-1]  # Remove last row from x_train
+        # elif len(y_train) > len(x_train):
+        #     y_train = y_train[:-1]  # Remove last row from y_train
+
         # param_grid = {
         #     'n_estimators': [300, 400, 500],
         #     'max_depth': [None, 5, 10, 20],
@@ -756,11 +762,14 @@ class mlbDeep():
         # grid_search = GridSearchCV(estimator=RandomForestRegressor(), param_grid=param_grid, cv=5, n_jobs=10, verbose=2)
 
         # # Fit the GridSearchCV object to the training data
-        # grid_search.fit(x_train, x_test)
+        # grid_search.fit(x_train, y_train)
 
         # # Print the best parameters and best score
         # print("Best Parameters: ", grid_search.best_params_)
         # print("Best Score: ", grid_search.best_score_)
+
+        # with open('random_forest_model.pkl', 'wb') as file:
+        #         pickle.dump(grid_search, file)
 
         #PARAMETERIZED RANDOM FOREST REGRESSION
         if not os.path.exists('random_forest_model.pkl'):
@@ -795,9 +804,9 @@ class mlbDeep():
         #     per_team_best_rolling_vals_mean = []
 
         #     #use ARIMA to estimate the next game values
-            df_forecast = self.forecast_features(df_inst)
+            _, df_forecast_second = self.forecast_features(df_inst)
             ground_truth = game_result_series.iloc[-1]
-            next_game_features = xgb_model.predict(df_forecast)
+            next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             print(next_game_features)
             #predict
             prediction_median = model.predict(next_game_features)
@@ -816,7 +825,6 @@ class mlbDeep():
             print(f'Accuracy out of {count_teams} teams: {sum(save_betting_teams) / count_teams}')
             print('=======================================')
             count_teams += 1
-
 
         #     #predict games
         #     #iterate over every game 
@@ -939,16 +947,17 @@ class mlbDeep():
         # next_game_features = model_fit.forecast(model_fit.endog, steps=1)
         # next_game_features = next_game_features[0] 
         # team_df_forecast = DataFrame(np.array(next_game_features).reshape(1,self.pca.n_components_), columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-        team_df_forecast = team_1_df2023.iloc[-1:]
-        return team_df_forecast
+        team_df_forecast = team_1_df2023.iloc[-1:] #last game
+        team_df_forecast_second = team_1_df2023.iloc[-2] #2nd to last game
+        return team_df_forecast, team_df_forecast_second
 
     def run_analysis(self):
         if argv[1] == "test":
             self.get_teams()
             self.split()
             # self.test_ma()
-            self.test_each_team_classify_test()
-            # self.test_each_team_classify()
+            # self.test_each_team_classify_test()
+            self.test_each_team_classify()
         else:
             self.get_teams()
             self.split()
