@@ -280,6 +280,69 @@ class mlbDeep():
                                     validation_data=(self.x_test_regress,self.y_test_regress),callbacks=[tensorboard_callback,early_stop]) 
             self.model_regress.save('deep_learning_mlb_regress_test.h5')
 
+    def deep_learn_features(self):
+        #split data
+        # Separate odd and even rows
+        x_data = self.x_data.iloc[::2]  # Odd rows
+        y_data = self.x_data.iloc[1::2]  # Even rows
+        # Adjust lengths if necessary
+        if len(x_data) > len(y_data):
+            x_data = x_data[:-1]  # Remove last row from x_train
+        elif len(y_data) > len(x_data):
+            y_data = y_data[:-1]  # Remove last row from y_train
+        x_train, x_test, y_train, y_test = train_test_split(x_data, y_data, train_size=0.8)
+        
+        if exists('deep_learning_mlb_feature_regress_test.h5'):
+            print('load trained feature regression model')
+            self.model_feature_regress_model = keras.models.load_model('deep_learning_mlb_feature_regress_test.h5')
+        else:
+            #best params
+            # 1.32 mse first try - 56% acc on test
+
+            # Best: 0.999925 using {'alpha': 0.1, 'batch_size': 32, 'dropout_rate': 0.2,
+            #  'learning_rate': 0.001, 'neurons': 16}
+            optimizer = keras.optimizers.Adam(learning_rate=0.001,
+                                            #   kernel_regularizer=regularizers.l2(0.001)
+                                              )
+            self.model_feature_regress_model = keras.Sequential([
+                    layers.Dense(48, input_shape=(x_train.shape[1],)),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(44),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(40),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(36),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(32),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(28),
+                    layers.LeakyReLU(alpha=0.2),
+                    layers.BatchNormalization(),
+                    layers.Dropout(0.2),
+                    layers.Dense(y_train.shape[1], activation='relu')
+                ])
+            self.model_feature_regress_model.compile(optimizer=optimizer,
+                loss='mean_squared_error',
+                metrics=['mse'])
+            print('Training Feature Regressor')
+            self.model_feature_regress_model.summary()
+            #run this to see the tensorBoard: tensorboard --logdir=./logs
+            tensorboard_callback = TensorBoard(log_dir="./logs")
+            early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
+            self.model_feature_regress_model.fit(x_train,y_train,epochs=500, batch_size=128, verbose=0,
+                                    validation_data=(x_test,y_test),callbacks=[tensorboard_callback,early_stop]) 
+            self.model_feature_regress_model.save('deep_learning_mlb_feature_regress_test.h5')
+
     def predict_two_teams(self):
         while True:
             print(f'ALL TEAMS: {sorted(self.teams_abv)}')
@@ -401,12 +464,12 @@ class mlbDeep():
 
             #Use random forest to predict future game outcomes
             # Load the model from file
-            with open('random_forest_model.pkl', 'rb') as file:
-                rf_model = pickle.load(file)
+            # with open('random_forest_model.pkl', 'rb') as file:
+            #     rf_model = pickle.load(file)
             forecast_team_1, _ = self.forecast_features(team_1_df2023)
             forecast_team_2, _ = self.forecast_features(team_2_df2023)
-            prediction_team_1 = self.model.predict(rf_model.predict(forecast_team_1))
-            prediction_team_2 = self.model.predict(rf_model.predict(forecast_team_2))
+            prediction_team_1 = self.model.predict(self.model_feature_regress_model.predict(forecast_team_1))
+            prediction_team_2 = self.model.predict(self.model_feature_regress_model.predict(forecast_team_2))
             print('====================================')
             print(f'rolling value for {self.team_1}: {int(best_values[self.team_1])}')
             print(f'rolling value for {self.team_2}: {int(best_values[self.team_2])}')
@@ -728,6 +791,7 @@ class mlbDeep():
     
     def test_each_team_classify_test(self):
         model = keras.models.load_model('deep_learning_mlb_class_test.h5')
+        feature_regress_model = keras.models.load_model('deep_learning_mlb_feature_regress_test.h5')
         final_dict = {}
         final_dict_mean = {}
         save_betting_teams = []
@@ -741,9 +805,9 @@ class mlbDeep():
         #         # Delete the file
         #         os.remove(file_path)
 
-        # Separate odd and even rows
-        x_train = self.x_data.iloc[::2]  # Odd rows
-        y_train = self.x_data.iloc[1::2]  # Even rows
+        # # Separate odd and even rows
+        # x_train = self.x_data.iloc[::2]  # Odd rows
+        # y_train = self.x_data.iloc[1::2]  # Even rows
 
         # # Adjust lengths if necessary
         # if len(x_train) > len(y_train):
@@ -771,21 +835,22 @@ class mlbDeep():
         # with open('random_forest_model.pkl', 'wb') as file:
         #         pickle.dump(grid_search, file)
 
-        #PARAMETERIZED RANDOM FOREST REGRESSION
-        if not os.path.exists('random_forest_model.pkl'):
-            params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
-            xgb_model = RandomForestRegressor(**params_grid)
-            xgb_model.fit(x_train, y_train)  # Assuming you have corresponding target values `y_train`
-            # Save the model to a file
-            with open('random_forest_model.pkl', 'wb') as file:
-                pickle.dump(xgb_model, file)
-        else:
-            with open('random_forest_model.pkl', 'rb') as file:
-                xgb_model = pickle.load(file)
+        # #PARAMETERIZED RANDOM FOREST REGRESSION
+        # if not os.path.exists('random_forest_model.pkl'):
+        #     params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
+        #     xgb_model = RandomForestRegressor(**params_grid)
+        #     xgb_model.fit(x_train, y_train)  # Assuming you have corresponding target values `y_train`
+        #     # Save the model to a file
+        #     with open('random_forest_model.pkl', 'wb') as file:
+        #         pickle.dump(xgb_model, file)
+        # else:
+        #     with open('random_forest_model.pkl', 'rb') as file:
+        #         xgb_model = pickle.load(file)
         #LINEAR REGRESSION
         # xgb_model = RadiusNeighborsRegressor().fit(x_train, x_test)
         # Forecast the next game's features
                 # Define the XGBoost model
+        
         count_teams = 1
         for abv in tqdm(sorted(self.teams_abv)):
         #     # try:
@@ -806,7 +871,7 @@ class mlbDeep():
         #     #use ARIMA to estimate the next game values
             _, df_forecast_second = self.forecast_features(df_inst)
             ground_truth = game_result_series.iloc[-1]
-            next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
+            next_game_features = feature_regress_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             print(next_game_features)
             #predict
             prediction_median = model.predict(next_game_features)
@@ -956,13 +1021,14 @@ class mlbDeep():
             self.get_teams()
             self.split()
             # self.test_ma()
-            # self.test_each_team_classify_test()
-            self.test_each_team_classify()
+            self.test_each_team_classify_test()
+            # self.test_each_team_classify()
         else:
             self.get_teams()
             self.split()
             self.deep_learn()
             self.deep_learn_regress()
+            self.deep_learn_features()
             self.predict_two_teams()
 def main():
     mlbDeep().run_analysis()
