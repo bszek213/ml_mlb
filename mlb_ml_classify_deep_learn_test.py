@@ -1,5 +1,5 @@
 #deep learning implementation - MLB
-import tensorflow as tf
+# import tensorflow as tf   
 from tensorflow import keras
 from tensorflow.keras import layers
 # from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
@@ -17,11 +17,11 @@ from sklearn.model_selection import GridSearchCV
 # from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
+# import seaborn as sns
 from sys import argv
-import joblib
-from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
-from difflib import get_close_matches
+# import joblib
+# from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
+# from difflib import get_close_matches
 from keras.callbacks import TensorBoard, EarlyStopping
 # from datetime import datetime, timedelta
 # from sklearn.metrics import roc_curve
@@ -31,12 +31,12 @@ import warnings
 import os
 import yaml
 from collections import Counter
-import pickle
+from pickle import dump, load
 # from statsmodels.tsa.arima.model import ARIMA
 # from statsmodels.tsa.vector_ar.var_model import VAR
-# import xgboost as xgb
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.neighbors import RadiusNeighborsRegressor
+import xgboost as xgb
+# from sklearn.ensemble import RandomForestRegressor
+# from sklearn.neighbors import RadiusNeighborsRegressor
 # Ignore the warning
 warnings.filterwarnings("ignore")
 
@@ -298,35 +298,25 @@ class mlbDeep():
         else:
             #best params
             # 1.32 mse first try - 56% acc on test
-
+            # 1.337 mse second try - 56% acc on test
+            # 1.331 mse third try - 46% acc on test
+            # 1.341 mse fourth try - 43% acc on test
+            # 1.355 mse fifth try - 46% acc on test
+            # 1.335 mse sixth try - 50% acc on test
+            # 1.337 mse seventh try - 60% acc on test
+            # 1.332 mse 8th try - 56% acc on test
             # Best: 0.999925 using {'alpha': 0.1, 'batch_size': 32, 'dropout_rate': 0.2,
             #  'learning_rate': 0.001, 'neurons': 16}
             optimizer = keras.optimizers.Adam(learning_rate=0.001,
                                             #   kernel_regularizer=regularizers.l2(0.001)
                                               )
             self.model_feature_regress_model = keras.Sequential([
-                    layers.Dense(48, input_shape=(x_train.shape[1],)),
-                    layers.LeakyReLU(alpha=0.2),
+                    layers.Dense(17, activation='relu', input_shape=(x_train.shape[1],)),
+                    # layers.LeakyReLU(alpha=0.2),
                     layers.BatchNormalization(),
                     layers.Dropout(0.2),
-                    layers.Dense(44),
-                    layers.LeakyReLU(alpha=0.2),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(40),
-                    layers.LeakyReLU(alpha=0.2),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(36),
-                    layers.LeakyReLU(alpha=0.2),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(32),
-                    layers.LeakyReLU(alpha=0.2),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(28),
-                    layers.LeakyReLU(alpha=0.2),
+                    layers.Dense(17, activation='relu'),
+                    # layers.LeakyReLU(alpha=0.2),
                     layers.BatchNormalization(),
                     layers.Dropout(0.2),
                     layers.Dense(y_train.shape[1], activation='relu')
@@ -466,10 +456,12 @@ class mlbDeep():
             # Load the model from file
             # with open('random_forest_model.pkl', 'rb') as file:
             #     rf_model = pickle.load(file)
+            with open('xgb_model.pkl', 'rb') as file:
+                xgb_model = load(file)
             forecast_team_1, _ = self.forecast_features(team_1_df2023)
             forecast_team_2, _ = self.forecast_features(team_2_df2023)
-            prediction_team_1 = self.model.predict(self.model_feature_regress_model.predict(forecast_team_1))
-            prediction_team_2 = self.model.predict(self.model_feature_regress_model.predict(forecast_team_2))
+            prediction_team_1 = self.model.predict(xgb_model.predict(forecast_team_1))
+            prediction_team_2 = self.model.predict(xgb_model.predict(forecast_team_2))
             print('====================================')
             print(f'rolling value for {self.team_1}: {int(best_values[self.team_1])}')
             print(f'rolling value for {self.team_2}: {int(best_values[self.team_2])}')
@@ -804,37 +796,47 @@ class mlbDeep():
         #     if filename.lower().endswith(".png") and os.path.isfile(file_path):
         #         # Delete the file
         #         os.remove(file_path)
+        if not os.path.exists('xgb_model.pkl'):
+            #split data
+            # Separate odd and even rows
+            x_data = self.x_data.iloc[::2]  # Odd rows
+            y_data = self.x_data.iloc[1::2]  # Even rows
+            # Adjust lengths if necessary
+            if len(x_data) > len(y_data):
+                x_data = x_data[:-1]  # Remove last row from x_train
+            elif len(y_data) > len(x_data):
+                y_data = y_data[:-1]  # Remove last row from y_train
+            x_train, x_test, y_train, y_test = train_test_split(x_data, y_data, train_size=0.8)
 
-        # # Separate odd and even rows
-        # x_train = self.x_data.iloc[::2]  # Odd rows
-        # y_train = self.x_data.iloc[1::2]  # Even rows
+            param_grid = {
+                'n_estimators': [300, 400, 500],
+                'max_depth': [None, 5, 10, 20],
+                'min_child_weight': [1, 2, 4],  # Change min_samples_split to min_child_weight
+                'gamma': [0, 0.1, 0.2],  # Change min_samples_leaf to gamma
+            }
 
-        # # Adjust lengths if necessary
-        # if len(x_train) > len(y_train):
-        #     x_train = x_train[:-1]  # Remove last row from x_train
-        # elif len(y_train) > len(x_train):
-        #     y_train = y_train[:-1]  # Remove last row from y_train
+            # Train the XGBoost model
+            # Create the GridSearchCV object
+            grid_search = GridSearchCV(estimator=xgb.XGBRegressor(), param_grid=param_grid, cv=5, n_jobs=5, verbose=2)
 
-        # param_grid = {
-        #     'n_estimators': [300, 400, 500],
-        #     'max_depth': [None, 5, 10, 20],
-        #     'min_samples_split': [2, 5, 10],
-        #     'min_samples_leaf': [1, 2, 4],
-        # }
-        # # Train the XGBoost model
-        # # Create the GridSearchCV object
-        # grid_search = GridSearchCV(estimator=RandomForestRegressor(), param_grid=param_grid, cv=5, n_jobs=10, verbose=2)
+            # Fit the GridSearchCV object to the training data
+            grid_search.fit(x_train, y_train,
+                            eval_set=[(x_test, y_test)], 
+                            early_stopping_rounds=10, verbose=True)
 
-        # # Fit the GridSearchCV object to the training data
-        # grid_search.fit(x_train, y_train)
+            # Print the best parameters and best score
+            print("Best Parameters: ", grid_search.best_params_)
+            print("Best Score: ", grid_search.best_score_)
 
-        # # Print the best parameters and best score
-        # print("Best Parameters: ", grid_search.best_params_)
-        # print("Best Score: ", grid_search.best_score_)
-
-        # with open('random_forest_model.pkl', 'wb') as file:
-        #         pickle.dump(grid_search, file)
-
+            with open('xgb_model.pkl', 'wb') as file:
+                    dump(grid_search, file)
+            xgb_model = grid_search
+        else:
+            # Best Parameters:  {'gamma': 0.2, 'max_depth': 5, 'min_child_weight': 2, 'n_estimators': 300}
+            # Best Score:  0.06696818279169564 mse
+            # Feature predcition accuracy: 66%
+            with open('xgb_model.pkl', 'rb') as file:
+                xgb_model = load(file)
         # #PARAMETERIZED RANDOM FOREST REGRESSION
         # if not os.path.exists('random_forest_model.pkl'):
         #     params_grid = {'max_depth': None, 'min_samples_leaf': 4, 'min_samples_split': 5, 'n_estimators': 500}
@@ -871,7 +873,7 @@ class mlbDeep():
         #     #use ARIMA to estimate the next game values
             _, df_forecast_second = self.forecast_features(df_inst)
             ground_truth = game_result_series.iloc[-1]
-            next_game_features = feature_regress_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
+            next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             print(next_game_features)
             #predict
             prediction_median = model.predict(next_game_features)

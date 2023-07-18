@@ -13,6 +13,7 @@ randomForestModelTuned.joblib
 classifierModelTuned.joblib
 random_forest_model.pkl
 random_forest_model_old.pkl
+xgb_model.pkl
 
 # C extensions
 *.so
