@@ -2,8 +2,8 @@
 
 Machine learning that predicts the outcomes of any MLB game. Data are from 2014 - 2023 seasons. 
 Current accuracy on test data:
-- Teams that I have a >70% prediction probability: 'KCR', 'OAK', 'ATL'
-- Regression DNN has a validation MSE of 0.3295
+- Teams that I have a >70% prediction probability: 'KCR', 'ATL'
+- Regression DNN has a validation RMSE of 1.15 runs
 
 ## Usage
 
@@ -15,7 +15,7 @@ python mlb_ml_classify_deep_learn.py test
 
 ```bash
 Correlated features   >= 0.90: ['RBI', 'onbase_plus_slugging', 'ER', 'strikes_total']
-Number of samples: 43408
+Number of samples: 62718
 
 ### Current prediction accuracies - DNN
 Validation Accuracy: 0.985

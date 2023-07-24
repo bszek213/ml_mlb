@@ -225,8 +225,8 @@ class mlbDeep():
             self.model.summary()
             #run this to see the tensorBoard: tensorboard --logdir=./logs
             tensorboard_callback = TensorBoard(log_dir="./logs")
-            early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
-            self.model.fit(self.x_train,self.y_train,epochs=500, batch_size=128, verbose=0,
+            early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=2)
+            self.model.fit(self.x_train,self.y_train,epochs=500, batch_size=128, verbose=2,
                                     validation_data=(self.x_test,self.y_test),callbacks=[tensorboard_callback,early_stop]) 
             self.model.save('deep_learning_mlb_class_test.h5')
 
@@ -275,8 +275,8 @@ class mlbDeep():
             self.model_regress.summary()
             #run this to see the tensorBoard: tensorboard --logdir=./logs
             tensorboard_callback = TensorBoard(log_dir="./logs")
-            early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
-            self.model_regress.fit(self.x_train_regress,self.y_train_regress,epochs=500, batch_size=128, verbose=0,
+            early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=2)
+            self.model_regress.fit(self.x_train_regress,self.y_train_regress,epochs=500, batch_size=128, verbose=2,
                                     validation_data=(self.x_test_regress,self.y_test_regress),callbacks=[tensorboard_callback,early_stop]) 
             self.model_regress.save('deep_learning_mlb_regress_test.h5')
 
@@ -341,11 +341,11 @@ class mlbDeep():
                 break
             self.team_2 = input('team_2: ').upper()
             #Game location
-            self.game_loc_team1 = int(input(f'{self.team_1} : Away = 0, Home = 1: '))
-            if self.game_loc_team1 == 0:
-                self.game_loc_team2 = 1
-            elif self.game_loc_team1 == 1:
-                self.game_loc_team2 = 0
+            # self.game_loc_team1 = int(input(f'{self.team_1} : Away = 0, Home = 1: '))
+            # if self.game_loc_team1 == 0:
+            #     self.game_loc_team2 = 1
+            # elif self.game_loc_team1 == 1:
+            #     self.game_loc_team2 = 0
             #2023 data
             year = 2023
             team_1_df2023 = web_scrape_mlb.get_data_team(self.team_1,year)
@@ -652,7 +652,6 @@ class mlbDeep():
                 # Delete the file
                 os.remove(file_path)
         for abv in tqdm(sorted(self.teams_abv)):
-            # try:
             print() #tqdm things
             print(f'current team: {abv}, year: {2023}')
             df_inst = web_scrape_mlb.get_data_team(abv,2023)
@@ -1022,9 +1021,11 @@ class mlbDeep():
         if argv[1] == "test":
             self.get_teams()
             self.split()
-            # self.test_ma()
-            self.test_each_team_classify_test()
-            # self.test_each_team_classify()
+            self.deep_learn()
+            self.deep_learn_regress()
+            self.deep_learn_features()
+            # self.test_each_team_classify_test()
+            self.test_each_team_classify()
         else:
             self.get_teams()
             self.split()
