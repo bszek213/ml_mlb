@@ -4,6 +4,7 @@ Machine learning that predicts the outcomes of any MLB game. Data are from 2014 
 Current accuracy on test data:
 - Teams that I have a >70% prediction probability: 'KCR', 'ATL'
 - Regression DNN has a validation RMSE of 0.57 runs
+- The Multi-Task Deep Neural Network that predicts the next games features has an accurcacy of 0.73 on the test data
 
 ## Usage
 

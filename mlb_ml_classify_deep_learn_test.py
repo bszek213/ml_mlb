@@ -40,6 +40,8 @@ from sklearn.metrics import make_scorer, mean_squared_error
 import xgboost as xgb
 from sklearn.ensemble import RandomForestRegressor
 from colorama import Fore, Style
+from keras.callbacks import LearningRateScheduler
+from tensorflow.keras.regularizers import l2, l1
 # from sklearn.neighbors import RadiusNeighborsRegressor
 # Ignore the warning
 warnings.filterwarnings("ignore")
@@ -61,6 +63,15 @@ def mape(y_true, y_pred):
 
 def mape_tf(y_true, y_pred):
     return tf.reduce_mean(tf.abs((y_true - y_pred) / y_true)) * 100
+
+def step_decay(epoch):
+    initial_lr = 0.01  # Initial learning rate
+    drop = 0.25         # Factor by which the learning rate will be reduced
+    epochs_drop = 40   # Number of epochs after which to apply the drop
+
+    # Calculate the new learning rate for the current epoch
+    new_lr = initial_lr * (drop ** (epoch // epochs_drop))
+    return new_lr
 
 class mlbDeep():
     def __init__(self):
@@ -360,32 +371,46 @@ class mlbDeep():
             inputs = Input(shape=(x_train.shape[1],))
 
             # Shared hidden layers 
-            shared_hidden_layer = Dense(80, activation='linear')(inputs)
-            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            unit_size = int(x_train.shape[1] / 2)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(inputs)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
             shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(60, activation='linear')(inputs)
-            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
             shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(50, activation='linear')(inputs)
-            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
             shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(45, activation='linear')(inputs)
-            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
             shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(40, activation='linear')(inputs)
-            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
             shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(30, activation='linear')(shared_hidden_layer)
-            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
             shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(15, activation='linear')(shared_hidden_layer)
-            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
             shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='relu')(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
 
             # Task-specific output layers
             output_layers = []
             for i in range(x_train.shape[1]):
-                output_layer = Dense(1, activation='linear', name=f'target_{i+1}')(shared_hidden_layer)
+                output_layer = Dense(1, activation='tanh', name=f'target_{i+1}')(shared_hidden_layer)
                 output_layers.append(output_layer)
 
             # Create the multi-task learning model
@@ -396,8 +421,10 @@ class mlbDeep():
 
             #Summary
             self.model_feature_regress_model.summary()
+            lr_scheduler = LearningRateScheduler(step_decay)
+            early_stop = EarlyStopping(monitor='val_loss', patience=200, mode='min', verbose=1)
             # Train the model
-            tensorboard_callback = TensorBoard(log_dir="./logs")
+            # tensorboard_callback = TensorBoard(log_dir="./logs")
             y_train_array = y_train.values
             history = self.model_feature_regress_model.fit(x_train, 
                       [y_train_array[:, i] for i in range(x_train.shape[1])], 
@@ -405,19 +432,20 @@ class mlbDeep():
                       batch_size=128, 
                       validation_data=(x_test,y_test), 
                       verbose=2,
-                      callbacks=[tensorboard_callback])
+                      callbacks=[lr_scheduler,early_stop])
             self.model_feature_regress_model.save('feature_deep_learning_mlb_regress_test.h5')
             plt.figure(figsize=(15,15))
             save_each_label_error = []
             for i in range(1,x_train.shape[1]+1):
                 col_name = f"val_target_{i}_mape_tf"
-                plt.plot(history.history[col_name]) #,label=col_name
+                plt.plot(history.history[col_name],color='grey',alpha=0.4) #,label=col_name
                 save_each_label_error.append(history.history[col_name])
             # Convert the list of lists into a NumPy array
             data_array = np.array(save_each_label_error)
             # Calculate the mean at each sample
             mean_at_each_sample = np.median(data_array, axis=0)
             final_mse_dnn = mean_at_each_sample[-1]
+            print("Final MSE:", final_mse_dnn)
             plt.plot(mean_at_each_sample,linewidth=4,color='black',label='mean of all error')
             plt.legend()
             plt.savefig('Multi_Task_learning_output.png',dpi=350)
@@ -622,13 +650,27 @@ class mlbDeep():
                 next_game_features_dnn_1 = feature_regress_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
                 next_game_features_dnn_2 = feature_regress_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
 
+                #reshape DNN
+                dnn_list_1 = []
+                for val in next_game_features_dnn_1:
+                    dnn_list_1.append(val[0][0])
+                #predict
+                dnn_list_1 = np.array(dnn_list_1)
+                dnn_list_1 = np.reshape(dnn_list_1, (1,len(dnn_list_1)))
+
+                dnn_list_2 = []
+                for val in next_game_features_dnn_2:
+                    dnn_list_2.append(val[0][0])
+                #predict
+                dnn_list_2 = np.array(dnn_list_2)
+                dnn_list_2 = np.reshape(dnn_list_2, (1,len(dnn_list_2)))
                 #predict
                 prediction_median_xgb_1 = self.model.predict(next_game_features_xgb_1)
                 prediction_median_xgb_2 = self.model.predict(next_game_features_xgb_2)
                 prediction_median_rf_1 = self.model.predict(next_game_features_rf_1)
                 prediction_median_rf_2 = self.model.predict(next_game_features_rf_2)
-                prediction_median_dnn_1 = self.model.predict(next_game_features_dnn_1)
-                prediction_median_dnn_2 = self.model.predict(next_game_features_dnn_2)
+                prediction_median_dnn_1 = self.model.predict(dnn_list_1)
+                prediction_median_dnn_2 = self.model.predict(dnn_list_2)
                 # next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
                 # print(next_game_features)
                 #predict
@@ -737,149 +779,149 @@ class mlbDeep():
             except:
                 print('Try again')
 
-    def test_ma(self):
-        # final_list = []
-        model = keras.models.load_model('deep_learning_mlb_class_test.h5')
-        model_regress = keras.models.load_model('deep_learning_mlb_regress_test.h5')
-        final_df_mean = DataFrame()
-        final_df_median = DataFrame()
-        final_df_mean_regress = DataFrame()
-        final_df_median_regress = DataFrame()
-        #load current day teams
-        team_names = read_csv('teams_curr_day.csv')
-        collapsed_list = team_names['Team_1'].tolist() + team_names['Team_1'].tolist()
-        for abv in tqdm(sorted(collapsed_list)):
-            # try:
-            print() #tqdm things
-            print(f'current team: {abv}, year: {2023}')
-            df_inst = web_scrape_mlb.get_data_team(abv,2023)
-            # df_inst.drop(columns=self.drop_cols, inplace=True)
-            for col in df_inst.columns:
-                df_inst[col].replace('', np.nan, inplace=True)
-                df_inst[col] = df_inst[col].astype(float)
-            #Actual
-            game_result_series = df_inst['game_result']
-            game_score_series = df_inst['RS']
-            df_inst.drop(columns=self.drop_cols_manual,inplace=True)
-            df_inst.dropna(inplace=True)
-            df_inst_regress = df_inst.drop(columns=["RS"])
+    # def test_ma(self):
+    #     # final_list = []
+    #     model = keras.models.load_model('deep_learning_mlb_class_test.h5')
+    #     model_regress = keras.models.load_model('deep_learning_mlb_regress_test.h5')
+    #     final_df_mean = DataFrame()
+    #     final_df_median = DataFrame()
+    #     final_df_mean_regress = DataFrame()
+    #     final_df_median_regress = DataFrame()
+    #     #load current day teams
+    #     team_names = read_csv('teams_curr_day.csv')
+    #     collapsed_list = team_names['Team_1'].tolist() + team_names['Team_1'].tolist()
+    #     for abv in tqdm(sorted(collapsed_list)):
+    #         # try:
+    #         print() #tqdm things
+    #         print(f'current team: {abv}, year: {2023}')
+    #         df_inst = web_scrape_mlb.get_data_team(abv,2023)
+    #         # df_inst.drop(columns=self.drop_cols, inplace=True)
+    #         for col in df_inst.columns:
+    #             df_inst[col].replace('', np.nan, inplace=True)
+    #             df_inst[col] = df_inst[col].astype(float)
+    #         #Actual
+    #         game_result_series = df_inst['game_result']
+    #         game_score_series = df_inst['RS']
+    #         df_inst.drop(columns=self.drop_cols_manual,inplace=True)
+    #         df_inst.dropna(inplace=True)
+    #         df_inst_regress = df_inst.drop(columns=["RS"])
 
-            #PCA and standardize
-            X_std_1 = self.scaler.transform(df_inst)
-            X_std_1_regress = self.scaler_regress.transform(df_inst_regress)
-            X_pca_1 = self.pca.transform(X_std_1)
-            X_pca_1_regress = self.pca_regress.transform(X_std_1_regress)
-            team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-            team_1_df2023_regress = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+    #         #PCA and standardize
+    #         X_std_1 = self.scaler.transform(df_inst)
+    #         X_std_1_regress = self.scaler_regress.transform(df_inst_regress)
+    #         X_pca_1 = self.pca.transform(X_std_1)
+    #         X_pca_1_regress = self.pca_regress.transform(X_std_1_regress)
+    #         team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+    #         team_1_df2023_regress = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
             
-            ma_range = np.arange(2,len(team_1_df2023)-1)
-            dict_range_mean_regress = {}
-            dict_range_median_regress = {}
-            dict_range_mean = {}
-            dict_range_median = {}
-            for ma in ma_range:
-                #Get rolling mean and medians
-                data1_mean = team_1_df2023.iloc[0:-1].ewm(span=ma,min_periods=ma-1).mean()
-                data1_mean_regress = team_1_df2023_regress.iloc[0:-1].ewm(span=ma,min_periods=ma-1).mean()
-                data1_median = team_1_df2023.iloc[0:-1].rolling(ma).median()
-                data1_median_regress = team_1_df2023_regress.iloc[0:-1].rolling(ma).median()
-                #Predict
-                prediction_mean = model.predict(data1_mean.iloc[-1:])
-                prediction_median = model.predict(data1_median.iloc[-1:])
-                prediction_mean_regress = model_regress.predict(data1_mean_regress.iloc[-1:])
-                prediction_median_regress = model_regress.predict(data1_median_regress.iloc[-1:])
-                #classification
-                if prediction_mean[0][0] > 0.5:
-                    result_mean = 1
-                else:
-                    result_mean = 0
-                if prediction_median[0][0] > 0.5:
-                    result_median = 1
-                else:
-                    result_median = 0
-                if int(game_result_series.iloc[-1]) == result_mean:
-                    range_mean = 1
-                else:
-                    range_mean = 0
-                if int(game_result_series.iloc[-1]) == result_median:
-                    range_median = 1
-                else:
-                    range_median = 0
-                dict_range_mean[ma] = [range_mean]
-                dict_range_median[ma] = [range_median]
-                #Regression
-                diff_mean_regress = abs(prediction_mean_regress[0][0] - game_score_series.iloc[-1])
-                diff_median_regress = abs(prediction_median_regress[0][0] - game_score_series.iloc[-1])
-                print(f'mean diff :{diff_mean_regress}')
-                print(f'median diff :{diff_median_regress}')
-                dict_range_mean_regress[ma] = [diff_mean_regress]
-                dict_range_median_regress[ma] = [diff_median_regress]
+    #         ma_range = np.arange(2,len(team_1_df2023)-1)
+    #         dict_range_mean_regress = {}
+    #         dict_range_median_regress = {}
+    #         dict_range_mean = {}
+    #         dict_range_median = {}
+    #         for ma in ma_range:
+    #             #Get rolling mean and medians
+    #             data1_mean = team_1_df2023.iloc[0:-1].ewm(span=ma,min_periods=ma-1).mean()
+    #             data1_mean_regress = team_1_df2023_regress.iloc[0:-1].ewm(span=ma,min_periods=ma-1).mean()
+    #             data1_median = team_1_df2023.iloc[0:-1].rolling(ma).median()
+    #             data1_median_regress = team_1_df2023_regress.iloc[0:-1].rolling(ma).median()
+    #             #Predict
+    #             prediction_mean = model.predict(data1_mean.iloc[-1:])
+    #             prediction_median = model.predict(data1_median.iloc[-1:])
+    #             prediction_mean_regress = model_regress.predict(data1_mean_regress.iloc[-1:])
+    #             prediction_median_regress = model_regress.predict(data1_median_regress.iloc[-1:])
+    #             #classification
+    #             if prediction_mean[0][0] > 0.5:
+    #                 result_mean = 1
+    #             else:
+    #                 result_mean = 0
+    #             if prediction_median[0][0] > 0.5:
+    #                 result_median = 1
+    #             else:
+    #                 result_median = 0
+    #             if int(game_result_series.iloc[-1]) == result_mean:
+    #                 range_mean = 1
+    #             else:
+    #                 range_mean = 0
+    #             if int(game_result_series.iloc[-1]) == result_median:
+    #                 range_median = 1
+    #             else:
+    #                 range_median = 0
+    #             dict_range_mean[ma] = [range_mean]
+    #             dict_range_median[ma] = [range_median]
+    #             #Regression
+    #             diff_mean_regress = abs(prediction_mean_regress[0][0] - game_score_series.iloc[-1])
+    #             diff_median_regress = abs(prediction_median_regress[0][0] - game_score_series.iloc[-1])
+    #             print(f'mean diff :{diff_mean_regress}')
+    #             print(f'median diff :{diff_median_regress}')
+    #             dict_range_mean_regress[ma] = [diff_mean_regress]
+    #             dict_range_median_regress[ma] = [diff_median_regress]
 
-            final_df_mean = concat([final_df_mean, DataFrame(dict_range_mean)])
-            final_df_median = concat([final_df_median, DataFrame(dict_range_median)])
-            final_df_mean_regress = concat([final_df_mean_regress, DataFrame(dict_range_mean_regress)])
-            final_df_median_regress = concat([final_df_median_regress, DataFrame(dict_range_median_regress)])
-            # print(final_df_mean)
-            # print(final_df_mean.dropna(axis=1))
-            sleep(3)
+    #         final_df_mean = concat([final_df_mean, DataFrame(dict_range_mean)])
+    #         final_df_median = concat([final_df_median, DataFrame(dict_range_median)])
+    #         final_df_mean_regress = concat([final_df_mean_regress, DataFrame(dict_range_mean_regress)])
+    #         final_df_median_regress = concat([final_df_median_regress, DataFrame(dict_range_median_regress)])
+    #         # print(final_df_mean)
+    #         # print(final_df_mean.dropna(axis=1))
+    #         sleep(3)
         
-        #Regression
-        final_df_mean_regress = final_df_mean_regress.dropna(axis=1)
-        final_df_median_regress = final_df_median_regress.dropna(axis=1)
-        column_sums_mean_regress = final_df_mean_regress.sum(axis=0)
-        column_sums_median_regress = final_df_median_regress.sum(axis=0)
+    #     #Regression
+    #     final_df_mean_regress = final_df_mean_regress.dropna(axis=1)
+    #     final_df_median_regress = final_df_median_regress.dropna(axis=1)
+    #     column_sums_mean_regress = final_df_mean_regress.sum(axis=0)
+    #     column_sums_median_regress = final_df_median_regress.sum(axis=0)
 
-        sorted_columns_regress_mean = column_sums_mean_regress.sort_values(ascending=True)
-        sorted_columns_regress_median = column_sums_median_regress.sort_values(ascending=True)
+    #     sorted_columns_regress_mean = column_sums_mean_regress.sort_values(ascending=True)
+    #     sorted_columns_regress_median = column_sums_median_regress.sort_values(ascending=True)
 
-        print(f'Mean Regression columns: {sorted_columns_regress_mean}')
-        print(f'Median Regression columns: {sorted_columns_regress_median}')
+    #     print(f'Mean Regression columns: {sorted_columns_regress_mean}')
+    #     print(f'Median Regression columns: {sorted_columns_regress_median}')
                 
-        final_df_mean = final_df_mean.dropna(axis=1)
-        final_df_median = final_df_median.dropna(axis=1)
-        column_sums_mean = final_df_mean.sum(axis=0)
-        column_sums_median = final_df_median.sum(axis=0)
-        proportions_mean = column_sums_mean / len(final_df_mean)
-        proportions_median = column_sums_median / len(final_df_median)
+    #     final_df_mean = final_df_mean.dropna(axis=1)
+    #     final_df_median = final_df_median.dropna(axis=1)
+    #     column_sums_mean = final_df_mean.sum(axis=0)
+    #     column_sums_median = final_df_median.sum(axis=0)
+    #     proportions_mean = column_sums_mean / len(final_df_mean)
+    #     proportions_median = column_sums_median / len(final_df_median)
 
-        sorted_columns = column_sums_mean.sort_values(ascending=False)
-        # Print the sorted columns
-        print(f'mean sorted values: {sorted_columns}')
+    #     sorted_columns = column_sums_mean.sort_values(ascending=False)
+    #     # Print the sorted columns
+    #     print(f'mean sorted values: {sorted_columns}')
 
-        #print each mean and median percentage correct
-        print(f'mean percent correct: {(sorted_columns.iloc[0] / len(collapsed_list))*100}')
+    #     #print each mean and median percentage correct
+    #     print(f'mean percent correct: {(sorted_columns.iloc[0] / len(collapsed_list))*100}')
 
-        sorted_columns = column_sums_median.sort_values(ascending=False)
-        # Print the sorted columns
-        print(f'median sorted values: {sorted_columns}')
-        print('=========')
-        print(sorted_columns.iloc[0])
+    #     sorted_columns = column_sums_median.sort_values(ascending=False)
+    #     # Print the sorted columns
+    #     print(f'median sorted values: {sorted_columns}')
+    #     print('=========')
+    #     print(sorted_columns.iloc[0])
 
-        #print each mean and median percentage correct
-        print(f'median percent correct: {(sorted_columns.iloc[0] / len(collapsed_list))*100}')
+    #     #print each mean and median percentage correct
+    #     print(f'median percent correct: {(sorted_columns.iloc[0] / len(collapsed_list))*100}')
     
-        #plot the summed values of correct 
-        plt.figure()
-        plt.bar(final_df_mean.columns, proportions_mean)
-        plt.xlabel('Column')
-        plt.ylabel('Proportion')
-        plt.title('Proportions of Summed Values - Mean')
-        plt.xticks(rotation=90)
-        plt.savefig('best_mean_ma.png',dpi=350)
-        plt.figure()
-        plt.bar(final_df_median.columns, proportions_median)
-        plt.xlabel('Column')
-        plt.ylabel('Proportion')
-        plt.title('Proportions of Summed Values - Median')
-        plt.xticks(rotation=90)
-        plt.savefig('best_median_ma.png',dpi=350)
+    #     #plot the summed values of correct 
+    #     plt.figure()
+    #     plt.bar(final_df_mean.columns, proportions_mean)
+    #     plt.xlabel('Column')
+    #     plt.ylabel('Proportion')
+    #     plt.title('Proportions of Summed Values - Mean')
+    #     plt.xticks(rotation=90)
+    #     plt.savefig('best_mean_ma.png',dpi=350)
+    #     plt.figure()
+    #     plt.bar(final_df_median.columns, proportions_median)
+    #     plt.xlabel('Column')
+    #     plt.ylabel('Proportion')
+    #     plt.title('Proportions of Summed Values - Median')
+    #     plt.xticks(rotation=90)
+    #     plt.savefig('best_median_ma.png',dpi=350)
 
-        # final_list.append(df_inst)
-        #     except Exception as e:
-        #         print(e)
-        #         print(f'{abv} data are not available')
-        #     sleep(4) #I get get banned for a small period of time if I do not do this
-        # final_test_data = concat(final_list)
+    #     # final_list.append(df_inst)
+    #     #     except Exception as e:
+    #     #         print(e)
+    #     #         print(f'{abv} data are not available')
+    #     #     sleep(4) #I get get banned for a small period of time if I do not do this
+    #     # final_test_data = concat(final_list)
 
     def test_each_team_classify(self):
         model = keras.models.load_model('deep_learning_mlb_class_test.h5')
@@ -1038,6 +1080,7 @@ class mlbDeep():
         final_dict = {}
         final_dict_mean = {}
         save_betting_teams = []
+        dnn_out = []
         
         count_teams = 1
         for abv in tqdm(sorted(self.teams_abv)):
@@ -1103,13 +1146,18 @@ class mlbDeep():
                 save_betting_teams.append(1)
             else:
                 save_betting_teams.append(0)
+            if int(ground_truth) == result_median_dnn:
+                dnn_out.append(1)
+            else:
+                dnn_out.append(0)
             print('=======================================')
             print(f'Prediction: {result_game} vs. Actual: {int(ground_truth)}')
             print('=======================================')
             print(f'Accuracy out of {count_teams} teams: {sum(save_betting_teams) / count_teams}')
+            print(f'DNN Accuracy out of {count_teams} teams: {sum(dnn_out) / count_teams}')
             print('=======================================')
             count_teams += 1
-
+        # input()
         #     #predict games
         #     #iterate over every game 
         #     num_iter = 0
