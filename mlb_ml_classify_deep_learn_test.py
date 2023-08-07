@@ -1,7 +1,9 @@
 #deep learning implementation - MLB
-# import tensorflow as tf   
+import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+from keras.models import Model
+from keras.layers import Input, Dense, Dropout, BatchNormalization
 # from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from keras import regularizers
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
@@ -53,6 +55,12 @@ What I have learned:
 VAR=50% acc, XGBoost=50% acc, RandomForest=63% acc, LinearRegression=53% acc, MLP=50% acc, KNeighestNeighbors= 57% acc
 RidgeCV= 50% acc, Ridge= 50% acc, DecisionTree= 60% acc
 """
+
+def mape(y_true, y_pred):
+    return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
+def mape_tf(y_true, y_pred):
+    return tf.reduce_mean(tf.abs((y_true - y_pred) / y_true)) * 100
 
 class mlbDeep():
     def __init__(self):
@@ -283,7 +291,8 @@ class mlbDeep():
             self.model_regress.save('deep_learning_mlb_regress_test.h5')
 
     def deep_learn_features(self):
-        mse_scorer = make_scorer(mean_squared_error)
+        # mse_scorer = make_scorer(mean_squared_error)
+        mse_scorer = make_scorer(mape, greater_is_better=False)
         #split data
         # Separate odd and even rows
         x_data = self.x_data.iloc[::2]  # Odd rows
@@ -297,7 +306,7 @@ class mlbDeep():
         
         if exists('feature_deep_learning_mlb_regress_test.h5'):
             print('load trained feature regression model')
-            self.model_feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5')
+            self.model_feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5',custom_objects={'mape_tf': mape_tf})
         else:
             #best params
             # 1.32 mse first try - 56% acc on test
@@ -313,29 +322,106 @@ class mlbDeep():
             optimizer = keras.optimizers.Adam(learning_rate=0.001,
                                             #   kernel_regularizer=regularizers.l2(0.001)
                                               )
-            self.model_feature_regress_model = keras.Sequential([
-                    layers.Dense(17, activation='relu', input_shape=(x_train.shape[1],)),
-                    # layers.LeakyReLU(alpha=0.2),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(17, activation='relu'),
-                    # layers.LeakyReLU(alpha=0.2),
-                    layers.BatchNormalization(),
-                    layers.Dropout(0.2),
-                    layers.Dense(y_train.shape[1], activation='relu')
-                ])
-            self.model_feature_regress_model.compile(optimizer=optimizer,
-                loss='mean_squared_error',
-                metrics=['mse'])
-            print('Training Feature Regressor')
+            # self.model_feature_regress_model = keras.Sequential([
+            #         layers.Dense(17, activation='relu', input_shape=(x_train.shape[1],)),
+            #         # layers.LeakyReLU(alpha=0.2),
+            #         layers.BatchNormalization(),
+            #         layers.Dropout(0.2),
+            #         layers.Dense(17, activation='relu'),
+            #         # layers.LeakyReLU(alpha=0.2),
+            #         layers.BatchNormalization(),
+            #         layers.Dropout(0.2),
+            #         layers.Dense(17, activation='relu'),
+            #         # layers.LeakyReLU(alpha=0.2),
+            #         layers.BatchNormalization(),
+            #         layers.Dropout(0.2),
+            #         layers.Dense(17, activation='relu'),
+            #         # layers.LeakyReLU(alpha=0.2),
+            #         layers.BatchNormalization(),
+            #         layers.Dropout(0.2),
+            #         layers.Dense(y_train.shape[1], activation='relu')
+            #     ])
+            # self.model_feature_regress_model.compile(optimizer=optimizer,
+            #     loss='mean_squared_error',
+            #     metrics=[mape_tf]
+            #     # metrics=['mse']
+            #     )
+            # print('Training Feature Regressor')
+            # self.model_feature_regress_model.summary()
+            # #run this to see the tensorBoard: tensorboard --logdir=./logs
+            # # tensorboard_callback = TensorBoard(log_dir="./logs")
+            # early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
+            # history = self.model_feature_regress_model.fit(x_train,y_train,epochs=500, batch_size=128, verbose=2,
+            #                         validation_data=(x_test,y_test),callbacks=[early_stop]) 
+            # final_mse_dnn = history.history['val_mape_tf'][-1]
+            # self.model_feature_regress_model.save('feature_deep_learning_mlb_regress_test.h5')
+            # input()
+            # Define the input layer In Multi-Task Learning approach
+            inputs = Input(shape=(x_train.shape[1],))
+
+            # Shared hidden layers 
+            shared_hidden_layer = Dense(80, activation='linear')(inputs)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dense(60, activation='linear')(inputs)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dense(50, activation='linear')(inputs)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dense(45, activation='linear')(inputs)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dense(40, activation='linear')(inputs)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dense(30, activation='linear')(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dense(15, activation='linear')(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+
+            # Task-specific output layers
+            output_layers = []
+            for i in range(x_train.shape[1]):
+                output_layer = Dense(1, activation='linear', name=f'target_{i+1}')(shared_hidden_layer)
+                output_layers.append(output_layer)
+
+            # Create the multi-task learning model
+            self.model_feature_regress_model = Model(inputs=inputs, outputs=output_layers)
+
+            # Compile the model
+            self.model_feature_regress_model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=[mape_tf])
+
+            #Summary
             self.model_feature_regress_model.summary()
-            #run this to see the tensorBoard: tensorboard --logdir=./logs
-            # tensorboard_callback = TensorBoard(log_dir="./logs")
-            early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
-            history = self.model_feature_regress_model.fit(x_train,y_train,epochs=500, batch_size=128, verbose=2,
-                                    validation_data=(x_test,y_test),callbacks=[early_stop]) 
-            final_mse_dnn = history.history['val_mse'][-1]
+            # Train the model
+            tensorboard_callback = TensorBoard(log_dir="./logs")
+            y_train_array = y_train.values
+            history = self.model_feature_regress_model.fit(x_train, 
+                      [y_train_array[:, i] for i in range(x_train.shape[1])], 
+                      epochs=500, 
+                      batch_size=128, 
+                      validation_data=(x_test,y_test), 
+                      verbose=2,
+                      callbacks=[tensorboard_callback])
             self.model_feature_regress_model.save('feature_deep_learning_mlb_regress_test.h5')
+            plt.figure(figsize=(15,15))
+            save_each_label_error = []
+            for i in range(1,x_train.shape[1]+1):
+                col_name = f"val_target_{i}_mape_tf"
+                plt.plot(history.history[col_name]) #,label=col_name
+                save_each_label_error.append(history.history[col_name])
+            # Convert the list of lists into a NumPy array
+            data_array = np.array(save_each_label_error)
+            # Calculate the mean at each sample
+            mean_at_each_sample = np.median(data_array, axis=0)
+            final_mse_dnn = mean_at_each_sample[-1]
+            plt.plot(mean_at_each_sample,linewidth=4,color='black',label='mean of all error')
+            plt.legend()
+            plt.savefig('Multi_Task_learning_output.png',dpi=350)
+            plt.close()
         
         if not exists('feature_xgb_model.pkl'):
             param_grid = {
@@ -389,259 +475,267 @@ class mlbDeep():
             final_score_rf = grid_search.best_score_
             with open('feature_random_forest_model.pkl', 'wb') as file:
                     dump(grid_search, file)
-            print(f'all scores mse: DNN - {final_mse_dnn}, xgb - {best_score_xgb}, random forest - {final_score_rf}')
+            print(f'all scores MAPE: DNN - {final_mse_dnn}, xgb - {best_score_xgb}, random forest - {final_score_rf}')
+            str_out = f'all scores MAPE: DNN - {final_mse_dnn}, xgb - {best_score_xgb}, random forest - {final_score_rf}'
+            file_path = 'output_feature_regression.txt'
+            # Open the file in write mode and save the data
+            with open(file_path, 'w') as file:
+                file.write(str_out)
 
 
     def predict_two_teams(self):
-        feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5')
+        feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5',custom_objects={'mape_tf': mape_tf})
         with open('feature_xgb_model.pkl', 'rb') as file:
                 xgb_model = load(file)
         with open('feature_random_forest_model.pkl', 'rb') as file:
                 rf_model = load(file)
         while True:
-            print(f'ALL TEAMS: {sorted(self.teams_abv)}')
-            self.team_1 = input('team_1: ').upper()
-            if self.team_1 == 'EXIT':
-                break
-            self.team_2 = input('team_2: ').upper()
-            #Game location
-            # self.game_loc_team1 = int(input(f'{self.team_1} : Away = 0, Home = 1: '))
-            # if self.game_loc_team1 == 0:
-            #     self.game_loc_team2 = 1
-            # elif self.game_loc_team1 == 1:
-            #     self.game_loc_team2 = 0
-            #2023 data
-            year = 2023
-            team_1_df2023 = web_scrape_mlb.get_data_team(self.team_1,year)
-            sleep(4)
-            team_2_df2023 = web_scrape_mlb.get_data_team(self.team_2,year)
-            #Remove Game Result add game location
-            team_1_df2023.drop(columns=self.drop_cols_manual,inplace=True)
-            team_2_df2023.drop(columns=self.drop_cols_manual,inplace=True)
-            # team_1_df2023.loc[team_1_df2023.index[-1],'game_location'] = self.game_loc_team1
-            # team_2_df2023.loc[team_2_df2023.index[-1],'game_location'] = self.game_loc_team2
-            #Drop the correlated features
-            # team_1_df2023.drop(columns=self.drop_cols, inplace=True)
-            # team_2_df2023.drop(columns=self.drop_cols, inplace=True)
-            #convert to float
-            for col in team_1_df2023.columns:
-                team_1_df2023[col].replace('', np.nan, inplace=True)
-                team_2_df2023[col].replace('', np.nan, inplace=True)
-                team_1_df2023[col] = team_1_df2023[col].astype(float)
-                team_2_df2023[col] = team_2_df2023[col].astype(float)
-            team_1_df2023.dropna(inplace=True)
-            team_2_df2023.dropna(inplace=True)
-            #Drop RS for regression
-            team_1_df2023_regress = team_1_df2023.drop(columns=['RS'])
-            team_2_df2023_regress = team_2_df2023.drop(columns=['RS'])
-            #PCA and standardize
-            # X_std_1 = self.scaler.transform(team_1_df2023)
-            # X_std_2 = self.scaler.transform(team_2_df2023) 
-            X_std_1_regress = self.scaler_regress.transform(team_1_df2023_regress)
-            X_std_2_regress = self.scaler_regress.transform(team_2_df2023_regress) 
+            try:
+                print(f'ALL TEAMS: {sorted(self.teams_abv)}')
+                self.team_1 = input('team_1: ').upper()
+                if self.team_1 == 'EXIT':
+                    break
+                self.team_2 = input('team_2: ').upper()
+                #Game location
+                # self.game_loc_team1 = int(input(f'{self.team_1} : Away = 0, Home = 1: '))
+                # if self.game_loc_team1 == 0:
+                #     self.game_loc_team2 = 1
+                # elif self.game_loc_team1 == 1:
+                #     self.game_loc_team2 = 0
+                #2023 data
+                year = 2023
+                team_1_df2023 = web_scrape_mlb.get_data_team(self.team_1,year)
+                sleep(4)
+                team_2_df2023 = web_scrape_mlb.get_data_team(self.team_2,year)
+                #Remove Game Result add game location
+                team_1_df2023.drop(columns=self.drop_cols_manual,inplace=True)
+                team_2_df2023.drop(columns=self.drop_cols_manual,inplace=True)
+                # team_1_df2023.loc[team_1_df2023.index[-1],'game_location'] = self.game_loc_team1
+                # team_2_df2023.loc[team_2_df2023.index[-1],'game_location'] = self.game_loc_team2
+                #Drop the correlated features
+                # team_1_df2023.drop(columns=self.drop_cols, inplace=True)
+                # team_2_df2023.drop(columns=self.drop_cols, inplace=True)
+                #convert to float
+                for col in team_1_df2023.columns:
+                    team_1_df2023[col].replace('', np.nan, inplace=True)
+                    team_2_df2023[col].replace('', np.nan, inplace=True)
+                    team_1_df2023[col] = team_1_df2023[col].astype(float)
+                    team_2_df2023[col] = team_2_df2023[col].astype(float)
+                team_1_df2023.dropna(inplace=True)
+                team_2_df2023.dropna(inplace=True)
+                #Drop RS for regression
+                team_1_df2023_regress = team_1_df2023.drop(columns=['RS'])
+                team_2_df2023_regress = team_2_df2023.drop(columns=['RS'])
+                #PCA and standardize
+                # X_std_1 = self.scaler.transform(team_1_df2023)
+                # X_std_2 = self.scaler.transform(team_2_df2023) 
+                X_std_1_regress = self.scaler_regress.transform(team_1_df2023_regress)
+                X_std_2_regress = self.scaler_regress.transform(team_2_df2023_regress) 
 
-            # X_pca_1 = self.pca.transform(X_std_1)
-            # X_pca_2 = self.pca.transform(X_std_2)
-            X_pca_1_regress = self.pca_regress.transform(X_std_1_regress)
-            X_pca_2_regress = self.pca_regress.transform(X_std_2_regress)
+                # X_pca_1 = self.pca.transform(X_std_1)
+                # X_pca_2 = self.pca.transform(X_std_2)
+                X_pca_1_regress = self.pca_regress.transform(X_std_1_regress)
+                X_pca_2_regress = self.pca_regress.transform(X_std_2_regress)
 
-            # team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-            # team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-            team_1_df2023_regress = DataFrame(X_pca_1_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
-            team_2_df2023_regress = DataFrame(X_pca_2_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
-    
-            #avoid dropping column issue
-            # data1_mean = DataFrame()
-            # data2_mean = DataFrame()
-            team_1_pred = []
-            team_2_pred = []
-            team_1_pred_regress = []
-            team_2_pred_regress = []
-            # median_bool = True
-            ma_range = [3]
-            #load best median rolling values
-            with open('best_values_median.yaml', 'r') as file:
-                best_values = yaml.safe_load(file)
-            for ma in tqdm(ma_range):
-                # if median_bool == True:
-                team_1_df2023_roll = team_1_df2023.rolling(int(best_values[self.team_1])).median()
-                team_2_df2023_roll = team_2_df2023.rolling(int(best_values[self.team_2])).median()
-                team_1_df2023_roll = team_1_df2023_roll.iloc[-1:]
-                team_2_df2023_roll = team_2_df2023_roll.iloc[-1:]
+                # team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                # team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                team_1_df2023_regress = DataFrame(X_pca_1_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+                team_2_df2023_regress = DataFrame(X_pca_2_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+        
+                #avoid dropping column issue
+                # data1_mean = DataFrame()
+                # data2_mean = DataFrame()
+                team_1_pred = []
+                team_2_pred = []
+                team_1_pred_regress = []
+                team_2_pred_regress = []
+                # median_bool = True
+                ma_range = [3]
+                #load best median rolling values
+                with open('best_values_median.yaml', 'r') as file:
+                    best_values = yaml.safe_load(file)
+                for ma in tqdm(ma_range):
+                    # if median_bool == True:
+                    team_1_df2023_roll = team_1_df2023.rolling(int(best_values[self.team_1])).median()
+                    team_2_df2023_roll = team_2_df2023.rolling(int(best_values[self.team_2])).median()
+                    team_1_df2023_roll = team_1_df2023_roll.iloc[-1:]
+                    team_2_df2023_roll = team_2_df2023_roll.iloc[-1:]
 
-                X_std_1 = self.scaler.transform(team_1_df2023_roll)
-                X_std_2 = self.scaler.transform(team_2_df2023_roll) 
-                X_pca_1 = self.pca.transform(X_std_1)
-                X_pca_2 = self.pca.transform(X_std_2)
-                data1_mean = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-                data2_mean = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-                # print(data1_mean)
-                #regress
-                data1_mean_regress = team_1_df2023_regress.rolling(int(best_values[self.team_1])).median()
-                data2_mean_regress = team_2_df2023_regress.rolling(int(best_values[self.team_2])).median()
-                # else:
-                #     data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
-                #     data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
-                #     #regress
-                #     data1_mean_regress = team_1_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
-                #     data2_mean_regress = team_2_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
-
-                # for cols in team_1_df2023.columns:
-                    # # ['cli', 'inherited_runners', 'inherited_score']
-                    # if "cli" not in cols or "inherited_runners" not in cols or "inherited_score" not in cols:
-                    #     # data1_mean[cols] = team_1_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
-                    #     # data2_mean[cols] = team_2_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
-                    #     data1_mean[cols] = team_1_df2023[cols].rolling(ma,min_periods=ma-1).median()
-                    #     data2_mean[cols] = team_2_df2023[cols].rolling(ma,min_periods=ma-1).median()
+                    X_std_1 = self.scaler.transform(team_1_df2023_roll)
+                    X_std_2 = self.scaler.transform(team_2_df2023_roll) 
+                    X_pca_1 = self.pca.transform(X_std_1)
+                    X_pca_2 = self.pca.transform(X_std_2)
+                    data1_mean = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                    data2_mean = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                    # print(data1_mean)
+                    #regress
+                    data1_mean_regress = team_1_df2023_regress.rolling(int(best_values[self.team_1])).median()
+                    data2_mean_regress = team_2_df2023_regress.rolling(int(best_values[self.team_2])).median()
                     # else:
-                    #     data1_mean[cols] = team_1_df2023[cols]
-                    #     data2_mean[cols] = team_2_df2023[cols]
-                # data1_mean = team_1_df2023.dropna().rolling(ma,min_periods=ma-1).median()
-                # data2_mean = team_2_df2023.dropna().rolling(ma,min_periods=ma-1).median()
-                # data1_mean['game_location'] = game_loc_team1
-                # data2_mean['game_location'] = game_loc_team2
-                #TEAM 1 Prediction
-                # x_new = self.scaler.transform(data1_mean.iloc[-1:])
-                # x_new2 = self.scaler.transform(data2_mean.iloc[-1:])
-                prediction = self.model.predict(data1_mean)
-                prediction2 = self.model.predict(data2_mean)
-                prediction_1_regress = self.model_regress.predict(data1_mean_regress.iloc[-1:])
-                prediction_2_regress = self.model_regress.predict(data2_mean_regress.iloc[-1:])
-                team_1_pred.append(prediction[0][0]*100)
-                team_2_pred.append(prediction2[0][0]*100)
-                team_1_pred_regress.append(prediction_1_regress[0][0])
-                team_2_pred_regress.append(prediction_2_regress[0][0])
-            self.save_outcomes_1 = team_1_pred
-            self.save_outcomes_2 = team_2_pred
+                    #     data1_mean = team_1_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                    #     data2_mean = team_2_df2023.ewm(span=ma,min_periods=ma-1).mean()
+                    #     #regress
+                    #     data1_mean_regress = team_1_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
+                    #     data2_mean_regress = team_2_df2023_regress.ewm(span=ma,min_periods=ma-1).mean()
 
-            # Best Parameters:  {'gamma': 0.2, 'max_depth': 5, 'min_child_weight': 1, 'n_estimators': 300}
-            # Best Score:  0.06727402162068385
-            with open('feature_xgb_model.pkl', 'rb') as file:
-                xgb_model = load(file)
-            forecast_team_1, _ = self.forecast_features(team_1_df2023)
-            forecast_team_2, _ = self.forecast_features(team_2_df2023)
-            # prediction_team_1 = self.model.predict(xgb_model.predict(forecast_team_1))
-            # prediction_team_2 = self.model.predict(xgb_model.predict(forecast_team_2))
+                    # for cols in team_1_df2023.columns:
+                        # # ['cli', 'inherited_runners', 'inherited_score']
+                        # if "cli" not in cols or "inherited_runners" not in cols or "inherited_score" not in cols:
+                        #     # data1_mean[cols] = team_1_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
+                        #     # data2_mean[cols] = team_2_df2023[cols].ewm(span=ma,min_periods=ma-1).mean()
+                        #     data1_mean[cols] = team_1_df2023[cols].rolling(ma,min_periods=ma-1).median()
+                        #     data2_mean[cols] = team_2_df2023[cols].rolling(ma,min_periods=ma-1).median()
+                        # else:
+                        #     data1_mean[cols] = team_1_df2023[cols]
+                        #     data2_mean[cols] = team_2_df2023[cols]
+                    # data1_mean = team_1_df2023.dropna().rolling(ma,min_periods=ma-1).median()
+                    # data2_mean = team_2_df2023.dropna().rolling(ma,min_periods=ma-1).median()
+                    # data1_mean['game_location'] = game_loc_team1
+                    # data2_mean['game_location'] = game_loc_team2
+                    #TEAM 1 Prediction
+                    # x_new = self.scaler.transform(data1_mean.iloc[-1:])
+                    # x_new2 = self.scaler.transform(data2_mean.iloc[-1:])
+                    prediction = self.model.predict(data1_mean)
+                    prediction2 = self.model.predict(data2_mean)
+                    prediction_1_regress = self.model_regress.predict(data1_mean_regress.iloc[-1:])
+                    prediction_2_regress = self.model_regress.predict(data2_mean_regress.iloc[-1:])
+                    team_1_pred.append(prediction[0][0]*100)
+                    team_2_pred.append(prediction2[0][0]*100)
+                    team_1_pred_regress.append(prediction_1_regress[0][0])
+                    team_2_pred_regress.append(prediction_2_regress[0][0])
+                self.save_outcomes_1 = team_1_pred
+                self.save_outcomes_2 = team_2_pred
 
-            next_game_features_xgb_1 = xgb_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
-            next_game_features_xgb_2 = xgb_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
-            next_game_features_rf_1 = rf_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
-            next_game_features_rf_2 = rf_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
-            next_game_features_dnn_1 = feature_regress_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
-            next_game_features_dnn_2 = feature_regress_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
+                # Best Parameters:  {'gamma': 0.2, 'max_depth': 5, 'min_child_weight': 1, 'n_estimators': 300}
+                # Best Score:  0.06727402162068385
+                with open('feature_xgb_model.pkl', 'rb') as file:
+                    xgb_model = load(file)
+                forecast_team_1, _ = self.forecast_features(team_1_df2023)
+                forecast_team_2, _ = self.forecast_features(team_2_df2023)
+                # prediction_team_1 = self.model.predict(xgb_model.predict(forecast_team_1))
+                # prediction_team_2 = self.model.predict(xgb_model.predict(forecast_team_2))
 
-            #predict
-            prediction_median_xgb_1 = self.model.predict(next_game_features_xgb_1)
-            prediction_median_xgb_2 = self.model.predict(next_game_features_xgb_2)
-            prediction_median_rf_1 = self.model.predict(next_game_features_rf_1)
-            prediction_median_rf_2 = self.model.predict(next_game_features_rf_2)
-            prediction_median_dnn_1 = self.model.predict(next_game_features_dnn_1)
-            prediction_median_dnn_2 = self.model.predict(next_game_features_dnn_2)
-            # next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
-            # print(next_game_features)
-            #predict
-            # prediction_median = model.predict(next_game_features)
-            #evaluate prediction
-            if prediction_median_xgb_1[0][0] > 0.5:
-                result_median_xgb_1 = 1
-            else:
-                result_median_xgb_1 = 0
-            if prediction_median_xgb_2[0][0] > 0.5:
-                result_median_xgb_2 = 1
-            else:
-                result_median_xgb_2 = 0
-            if prediction_median_rf_1[0][0] > 0.5:
-                result_median_rf_1 = 1
-            else:
-                result_median_rf_1 = 0
-            if prediction_median_rf_2[0][0] > 0.5:
-                result_median_rf_2 = 1
-            else:
-                result_median_rf_2 = 0
-            if prediction_median_dnn_1[0][0] > 0.5:
-                result_median_dnn_1 = 1
-            else:
-                result_median_dnn_1 = 0
-            if prediction_median_dnn_2[0][0] > 0.5:
-                result_median_dnn_2 = 1
-            else:
-                result_median_dnn_2 = 0
+                next_game_features_xgb_1 = xgb_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
+                next_game_features_xgb_2 = xgb_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
+                next_game_features_rf_1 = rf_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
+                next_game_features_rf_2 = rf_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
+                next_game_features_dnn_1 = feature_regress_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
+                next_game_features_dnn_2 = feature_regress_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
 
-            # ensemble_1 = result_median_xgb_1 + result_median_rf_1 + result_median_dnn_1# + result_median_mlp + result_median_dt
-            # ensemble_2 = result_median_xgb_2 + result_median_rf_2 + result_median_dnn_2
-            #all models
-            # if ensemble_1 >=2:
-            #     result_game_1= 1
-            # else:
-            #     result_game_1 = 0
-            # if ensemble_2 >=2:
-            #     result_game_2= 1
-            # else:
-            #     result_game_2 = 0
-            print('====================================')
-            print('Classifier')
-            if self.save_outcomes_1 > self.save_outcomes_2:
-                print(Fore.GREEN + Style.BRIGHT + f'{self.team_1} prediction: {self.save_outcomes_1}' + Style.RESET_ALL)
-                print(f'{self.team_2} prediction: {self.save_outcomes_2}')
-            else:
-                print(f'{self.team_1} prediction: {self.save_outcomes_1}')
-                print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} prediction: {self.save_outcomes_2}' + Style.RESET_ALL)
-            print('====================================')
-            print('Regressor')
-            if team_1_pred_regress > team_2_pred_regress:
-                print(Fore.GREEN + Style.BRIGHT +  f'{self.team_1} Predicted Scores: {team_1_pred_regress}' + Style.RESET_ALL)
-                print(f'{self.team_2} Predicted Scores: {team_2_pred_regress}')
-            else:
-                print(f'{self.team_1} Predicted Scores: {team_1_pred_regress}')
-                print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} Predicted Scores: {team_2_pred_regress}' + Style.RESET_ALL)
-            print('====================================')
-            print('Classifier and Random Forest on Feature Forecasting')
-            num_true_conditions_team1 = 0
-            num_true_conditions_team2 = 0
+                #predict
+                prediction_median_xgb_1 = self.model.predict(next_game_features_xgb_1)
+                prediction_median_xgb_2 = self.model.predict(next_game_features_xgb_2)
+                prediction_median_rf_1 = self.model.predict(next_game_features_rf_1)
+                prediction_median_rf_2 = self.model.predict(next_game_features_rf_2)
+                prediction_median_dnn_1 = self.model.predict(next_game_features_dnn_1)
+                prediction_median_dnn_2 = self.model.predict(next_game_features_dnn_2)
+                # next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
+                # print(next_game_features)
+                #predict
+                # prediction_median = model.predict(next_game_features)
+                #evaluate prediction
+                if prediction_median_xgb_1[0][0] > 0.5:
+                    result_median_xgb_1 = 1
+                else:
+                    result_median_xgb_1 = 0
+                if prediction_median_xgb_2[0][0] > 0.5:
+                    result_median_xgb_2 = 1
+                else:
+                    result_median_xgb_2 = 0
+                if prediction_median_rf_1[0][0] > 0.5:
+                    result_median_rf_1 = 1
+                else:
+                    result_median_rf_1 = 0
+                if prediction_median_rf_2[0][0] > 0.5:
+                    result_median_rf_2 = 1
+                else:
+                    result_median_rf_2 = 0
+                if prediction_median_dnn_1[0][0] > 0.5:
+                    result_median_dnn_1 = 1
+                else:
+                    result_median_dnn_1 = 0
+                if prediction_median_dnn_2[0][0] > 0.5:
+                    result_median_dnn_2 = 1
+                else:
+                    result_median_dnn_2 = 0
 
-            # Check conditions for team 1
-            if round(prediction_median_xgb_1[0][0]*100, 2) > 0.5:
-                num_true_conditions_team1 += 1
+                # ensemble_1 = result_median_xgb_1 + result_median_rf_1 + result_median_dnn_1# + result_median_mlp + result_median_dt
+                # ensemble_2 = result_median_xgb_2 + result_median_rf_2 + result_median_dnn_2
+                #all models
+                # if ensemble_1 >=2:
+                #     result_game_1= 1
+                # else:
+                #     result_game_1 = 0
+                # if ensemble_2 >=2:
+                #     result_game_2= 1
+                # else:
+                #     result_game_2 = 0
+                print('====================================')
+                print('Classifier')
+                if self.save_outcomes_1 > self.save_outcomes_2:
+                    print(Fore.GREEN + Style.BRIGHT + f'{self.team_1} prediction: {self.save_outcomes_1}' + Style.RESET_ALL)
+                    print(f'{self.team_2} prediction: {self.save_outcomes_2}')
+                else:
+                    print(f'{self.team_1} prediction: {self.save_outcomes_1}')
+                    print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} prediction: {self.save_outcomes_2}' + Style.RESET_ALL)
+                print('====================================')
+                print('Regressor')
+                if team_1_pred_regress > team_2_pred_regress:
+                    print(Fore.GREEN + Style.BRIGHT +  f'{self.team_1} Predicted Scores: {team_1_pred_regress}' + Style.RESET_ALL)
+                    print(f'{self.team_2} Predicted Scores: {team_2_pred_regress}')
+                else:
+                    print(f'{self.team_1} Predicted Scores: {team_1_pred_regress}')
+                    print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} Predicted Scores: {team_2_pred_regress}' + Style.RESET_ALL)
+                print('====================================')
+                print('Classifier and Random Forest on Feature Forecasting')
+                num_true_conditions_team1 = 0
+                num_true_conditions_team2 = 0
 
-            if round(prediction_median_rf_1[0][0]*100, 2) > 0.5:
-                num_true_conditions_team1 += 1
+                # Check conditions for team 1
+                if round(prediction_median_xgb_1[0][0]*100, 2) > 0.5:
+                    num_true_conditions_team1 += 1
 
-            if round(prediction_median_dnn_1[0][0]*100, 2) > 0.5:
-                num_true_conditions_team1 += 1
+                if round(prediction_median_rf_1[0][0]*100, 2) > 0.5:
+                    num_true_conditions_team1 += 1
 
-            # Check conditions for team 2
-            if round(prediction_median_xgb_2[0][0]*100, 2) > 0.5:
-                num_true_conditions_team2 += 1
+                if round(prediction_median_dnn_1[0][0]*100, 2) > 0.5:
+                    num_true_conditions_team1 += 1
 
-            if round(prediction_median_rf_2[0][0]*100, 2) > 0.5:
-                num_true_conditions_team2 += 1
+                # Check conditions for team 2
+                if round(prediction_median_xgb_2[0][0]*100, 2) > 0.5:
+                    num_true_conditions_team2 += 1
 
-            if round(prediction_median_dnn_2[0][0]*100, 2) > 0.5:
-                num_true_conditions_team2 += 1
+                if round(prediction_median_rf_2[0][0]*100, 2) > 0.5:
+                    num_true_conditions_team2 += 1
 
-            if num_true_conditions_team2 < 2 and num_true_conditions_team1 < 2:
-                print(Fore.RED + Style.BRIGHT +f'{self.team_1} Predicted Winning Probability: {round(prediction_median_xgb_1[0][0]*100,2)}% XGB, {round(prediction_median_rf_1[0][0]*100,2)}% RF, {round(prediction_median_dnn_1[0][0]*100,2)}% DNN' + Style.RESET_ALL)
-                print(Fore.RED + Style.BRIGHT + f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN' + Style.RESET_ALL) 
-            elif num_true_conditions_team2 >= 2 and num_true_conditions_team1 >= 2:
-                print(Fore.GREEN + Style.BRIGHT +f'{self.team_1} Predicted Winning Probability: {round(prediction_median_xgb_1[0][0]*100,2)}% XGB, {round(prediction_median_rf_1[0][0]*100,2)}% RF, {round(prediction_median_dnn_1[0][0]*100,2)}% DNN' + Style.RESET_ALL)
-                print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN' + Style.RESET_ALL) 
-            elif num_true_conditions_team1 >= 2:
-                print(Fore.GREEN + Style.BRIGHT +f'{self.team_1} Predicted Winning Probability: {round(prediction_median_xgb_1[0][0]*100,2)}% XGB, {round(prediction_median_rf_1[0][0]*100,2)}% RF, {round(prediction_median_dnn_1[0][0]*100,2)}% DNN' + Style.RESET_ALL)
-                print(f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN')
-            elif num_true_conditions_team2 >= 2:
-                print(f'{self.team_1} Predicted Winning Probability: {round(prediction_median_xgb_1[0][0]*100,2)}% XGB, {round(prediction_median_rf_1[0][0]*100,2)}% RF, {round(prediction_median_dnn_1[0][0]*100,2)}% DNN')
-                print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN' + Style.RESET_ALL)
-            print('====================================')
-            if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
-                print('Game will be close.')
-            if sum(team_1_pred) > sum(team_2_pred):
-                self.team_outcome = self.team_1
-                # print(f'{self.team_1} wins')
-            elif sum(team_1_pred) < sum(team_2_pred):
-                self.team_outcome = self.team_2
-            #     print(f'{self.team_2} wins')
-            # print('====================================')
-            # self.predict_two_teams_running()
+                if round(prediction_median_dnn_2[0][0]*100, 2) > 0.5:
+                    num_true_conditions_team2 += 1
+
+                if num_true_conditions_team2 < 2 and num_true_conditions_team1 < 2:
+                    print(Fore.RED + Style.BRIGHT +f'{self.team_1} Predicted Winning Probability: {round(prediction_median_xgb_1[0][0]*100,2)}% XGB, {round(prediction_median_rf_1[0][0]*100,2)}% RF, {round(prediction_median_dnn_1[0][0]*100,2)}% DNN' + Style.RESET_ALL)
+                    print(Fore.RED + Style.BRIGHT + f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN' + Style.RESET_ALL) 
+                elif num_true_conditions_team2 >= 2 and num_true_conditions_team1 >= 2:
+                    print(Fore.GREEN + Style.BRIGHT +f'{self.team_1} Predicted Winning Probability: {round(prediction_median_xgb_1[0][0]*100,2)}% XGB, {round(prediction_median_rf_1[0][0]*100,2)}% RF, {round(prediction_median_dnn_1[0][0]*100,2)}% DNN' + Style.RESET_ALL)
+                    print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN' + Style.RESET_ALL) 
+                elif num_true_conditions_team1 >= 2:
+                    print(Fore.GREEN + Style.BRIGHT +f'{self.team_1} Predicted Winning Probability: {round(prediction_median_xgb_1[0][0]*100,2)}% XGB, {round(prediction_median_rf_1[0][0]*100,2)}% RF, {round(prediction_median_dnn_1[0][0]*100,2)}% DNN' + Style.RESET_ALL)
+                    print(f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN')
+                elif num_true_conditions_team2 >= 2:
+                    print(f'{self.team_1} Predicted Winning Probability: {round(prediction_median_xgb_1[0][0]*100,2)}% XGB, {round(prediction_median_rf_1[0][0]*100,2)}% RF, {round(prediction_median_dnn_1[0][0]*100,2)}% DNN')
+                    print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN' + Style.RESET_ALL)
+                print('====================================')
+                if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
+                    print('Game will be close.')
+                if sum(team_1_pred) > sum(team_2_pred):
+                    self.team_outcome = self.team_1
+                    # print(f'{self.team_1} wins')
+                elif sum(team_1_pred) < sum(team_2_pred):
+                    self.team_outcome = self.team_2
+                #     print(f'{self.team_2} wins')
+                # print('====================================')
+                # self.predict_two_teams_running()
+            except:
+                print('Try again')
 
     def test_ma(self):
         # final_list = []
@@ -936,7 +1030,7 @@ class mlbDeep():
     
     def test_each_team_classify_test(self):
         model = keras.models.load_model('deep_learning_mlb_class_test.h5')
-        feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5')
+        feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5',custom_objects={'mape_tf': mape_tf})
         with open('feature_xgb_model.pkl', 'rb') as file:
                 xgb_model = load(file)
         with open('feature_random_forest_model.pkl', 'rb') as file:
@@ -969,11 +1063,15 @@ class mlbDeep():
             next_game_features_xgb = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             next_game_features_rf = rf_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             next_game_features_dnn = feature_regress_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
-
+            dnn_list = []
+            for val in next_game_features_dnn:
+                dnn_list.append(val[0][0])
             #predict
+            dnn_list = np.array(dnn_list)
+            dnn_list = np.reshape(dnn_list, (1,len(dnn_list)))
             prediction_median_xgb = model.predict(next_game_features_xgb)
             prediction_median_rf = model.predict(next_game_features_rf)
-            prediction_median_dnn = model.predict(next_game_features_dnn)
+            prediction_median_dnn = model.predict(dnn_list)
             # next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             # print(next_game_features)
             #predict
