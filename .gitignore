@@ -14,6 +14,7 @@ classifierModelTuned.joblib
 feature_deep_learning_mlb_regress_test.h5
 feature_random_forest_model.pkl
 feature_xgb_model.pkl
+feature_linear_regression.pkl
 # C extensions
 *.so
 

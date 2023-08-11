@@ -42,6 +42,9 @@ from sklearn.ensemble import RandomForestRegressor
 from colorama import Fore, Style
 from keras.callbacks import LearningRateScheduler
 from tensorflow.keras.regularizers import l2, l1
+from sklearn.linear_model import LinearRegression
+from psutil import virtual_memory
+from sys import exit
 # from sklearn.neighbors import RadiusNeighborsRegressor
 # Ignore the warning
 warnings.filterwarnings("ignore")
@@ -72,6 +75,14 @@ def step_decay(epoch):
     # Calculate the new learning rate for the current epoch
     new_lr = initial_lr * (drop ** (epoch // epochs_drop))
     return new_lr
+
+def rmse(y_true,y_pred):
+    squared_diff = (y_pred - y_true) ** 2
+    return np.sqrt(np.mean(squared_diff))
+
+def check_ram_usage():
+    ram_percent = virtual_memory().percent
+    return ram_percent > 98
 
 class mlbDeep():
     def __init__(self):
@@ -315,6 +326,24 @@ class mlbDeep():
             y_data = y_data[:-1]  # Remove last row from y_train
         x_train, x_test, y_train, y_test = train_test_split(x_data, y_data, train_size=0.8)
         
+        #linear regression
+        if not  exists('feature_linear_regression.pkl'):
+            lin_model = LinearRegression().fit(x_train,y_train)
+            y_pred = lin_model.predict(x_test)
+            y_test_np = y_test.to_numpy()
+            counter_err = []
+            for iter,inst in enumerate(y_pred):
+                mape_list = []
+                for i in range(len(inst)):  
+                    mape_list.append(mape(y_test_np[iter][i],inst[i]))
+                counter_err.append(np.mean(mape_list))
+            lin_error = np.median(counter_err)
+            print(f'Linear Regression error: {lin_error}')
+            # plt.hist(counter_err,bins = 50, range=(0, 1000))
+            # plt.show()
+            with open('feature_linear_regression.pkl', 'wb') as file:
+                    dump(lin_model, file)
+
         if exists('feature_deep_learning_mlb_regress_test.h5'):
             print('load trained feature regression model')
             self.model_feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5',custom_objects={'mape_tf': mape_tf})
@@ -503,8 +532,8 @@ class mlbDeep():
             final_score_rf = grid_search.best_score_
             with open('feature_random_forest_model.pkl', 'wb') as file:
                     dump(grid_search, file)
-            print(f'all scores MAPE: DNN - {final_mse_dnn}, xgb - {best_score_xgb}, random forest - {final_score_rf}')
-            str_out = f'all scores MAPE: DNN - {final_mse_dnn}, xgb - {best_score_xgb}, random forest - {final_score_rf}'
+            print(f'all scores MAPE: DNN - {final_mse_dnn}, xgb - {best_score_xgb}, random forest - {final_score_rf}, lin regrss - {lin_error}')
+            str_out = f'all scores MAPE: DNN - {final_mse_dnn}, xgb - {best_score_xgb}, random forest - {final_score_rf}, lin regrss - {lin_error}'
             file_path = 'output_feature_regression.txt'
             # Open the file in write mode and save the data
             with open(file_path, 'w') as file:
@@ -924,53 +953,76 @@ class mlbDeep():
     #     # final_test_data = concat(final_list)
 
     def test_each_team_classify(self):
-        model = keras.models.load_model('deep_learning_mlb_class_test.h5')
-        # model_regress = keras.models.load_model('deep_learning_mlb_regress_test.h5')
-        # final_df_mean = DataFrame()
-        # final_df_median = DataFrame()
-        final_dict = {}
-        final_dict_mean = {}
+        #only include the teams that have not been included yet 
+        if exists('best_values_runs.yaml'):
+            with open('best_values_runs.yaml', 'r') as file:
+                        final_dict_runs = yaml.safe_load(file)
+            with open('best_values_mean.yaml', 'r') as file:
+                        final_dict_mean = yaml.safe_load(file)
+            with open('best_values_median.yaml', 'r') as file:
+                        final_dict = yaml.safe_load(file)
+            filtered_teams = [team for team in self.teams_abv if team not in final_dict_runs.keys()]
+        else:
+            final_dict = {}
+            final_dict_mean = {}
+            final_dict_runs = {}
+            filtered_teams = self.teams_abv
         save_betting_teams = []
-        save_betting_teams_opposite = []
         
         #delete all previous .pngs
-        folder_path = os.path.join(os.getcwd(),'histogram_teams')
-        for filename in os.listdir(folder_path):
-            file_path = os.path.join(folder_path, filename)
-            # Check if the file is a PNG image
-            if filename.lower().endswith(".png") and os.path.isfile(file_path):
-                # Delete the file
-                os.remove(file_path)
-        for abv in tqdm(sorted(self.teams_abv)):
+        # folder_path = os.path.join(os.getcwd(),'histogram_teams')
+        # for filename in os.listdir(folder_path):
+        #     file_path = os.path.join(folder_path, filename)
+        #     # Check if the file is a PNG image
+        #     if filename.lower().endswith(".png") and os.path.isfile(file_path):
+        #         # Delete the file
+        #         os.remove(file_path)
+
+        for abv in tqdm(sorted(filtered_teams)):
+            if check_ram_usage():
+                print("RAM usage is above 98%")
+                exit()
+            model = keras.models.load_model('deep_learning_mlb_class_test.h5')
+            model_regress = keras.models.load_model('deep_learning_mlb_regress_test.h5')
             print() #tqdm things
             print(f'current team: {abv}, year: {2023}')
             df_inst = web_scrape_mlb.get_data_team(abv,2023)
             for col in df_inst.columns:
                 df_inst[col].replace('', np.nan, inplace=True)
                 df_inst[col] = df_inst[col].astype(float)
-            #Actual
+
             df_inst.dropna(inplace=True)
             game_result_series = df_inst['game_result']
             df_inst.drop(columns=self.drop_cols_manual,inplace=True)
-            range_data = np.arange(2,40)
+            #Actual Regressor
+            game_result_series_runs = df_inst['RS'].astype(int)
+            df_inst_runs = df_inst.drop(columns=['RS'])
+            per_team_best_rolling_vals_runs = []
+            per_team_best_rolling_vals_runs_key = []
+
+            #Actual Classifier
             per_team_best_rolling_vals = []
             per_team_best_rolling_vals_mean = []
             
             #iterate over every game 
             num_iter = 0
+            range_data = np.arange(2,40)
             for game in range(range_data[-1],len(df_inst)-1):
                 ground_truth = game_result_series.iloc[game+1]
+                ground_truth_runs = game_result_series_runs.iloc[game+1]
                 dict_range_median = {}
                 dict_range_mean = {}
+                dict_range_runs= {}
                 for roll_val in range_data:
                     data1_median = df_inst.iloc[0:game].rolling(roll_val).median()
                     # data1_median.loc[data1_median.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
                     data1_mean = df_inst.iloc[0:game].ewm(span=roll_val,min_periods=roll_val-1).mean()
                     # data1_mean.loc[data1_mean.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
+                    data_runs = df_inst_runs.iloc[0:game].rolling(roll_val).median()
                     # print(data1_median)
                     # print('==============')
                     # print(data1_mean)
-                    #apply standardization and PCA
+                    #apply standardization and PCA - Classifier 
                     X_std_1 = self.scaler.transform(data1_median.iloc[-1:])
                     X_std_1_mean = self.scaler.transform(data1_mean.iloc[-1:])
                     X_pca_1 = self.pca.transform(X_std_1)
@@ -979,6 +1031,17 @@ class mlbDeep():
                     team_1_df2023_mean = DataFrame(X_pca_1_mean, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
                     prediction_median = model.predict(team_1_df2023.iloc[-1:])
                     prediction_mean = model.predict(team_1_df2023_mean.iloc[-1:])
+
+                    #apply standardization and PCA - Regressor 
+                    X_std_runs = self.scaler_regress.transform(data_runs.iloc[-1:])
+                    X_pca_runs = self.pca_regress.transform(X_std_runs)
+                    team_1_runs = DataFrame(X_pca_runs, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+                    prediction_runs = model_regress.predict(team_1_runs.iloc[-1:])
+
+                    #Regression error 
+                    pts_error = rmse(ground_truth_runs,prediction_runs) #RMSE
+                    dict_range_runs[roll_val] = [pts_error]
+
                     #median prediction
                     if prediction_median[0][0] > 0.5:
                         result_median = 1
@@ -999,12 +1062,26 @@ class mlbDeep():
                     else:
                         range_mean = 0
                     dict_range_mean[roll_val] = [range_mean]
+                    #attempt to free up memory
+                    del prediction_runs
+                    del prediction_median
+                    del prediction_mean
                 num_iter += 1
+                
+                #Extract key that has lowest RMSE
+                min_key = min(dict_range_runs, key=dict_range_runs.get)
+                min_mse_value = dict_range_runs[min_key]
+                per_team_best_rolling_vals_runs_key.append(min_key)
+                per_team_best_rolling_vals_runs.append(min_mse_value)
+
                 #extract keys that have a value of 1 
                 keys_with_value_one = [key for key, value in dict_range_median.items() if value == [1]]
                 keys_with_value_one_mean = [key for key, value in dict_range_mean.items() if value == [1]]
                 per_team_best_rolling_vals.append(keys_with_value_one)
                 per_team_best_rolling_vals_mean.append(keys_with_value_one_mean)
+            del model_regress
+            del model
+            del df_inst
             #remove empty sublists and combine into one list
             merged_list = [item for sublist in per_team_best_rolling_vals if sublist for item in sublist]
             merged_list_mean = [item for sublist in per_team_best_rolling_vals_mean if sublist for item in sublist]
@@ -1040,13 +1117,35 @@ class mlbDeep():
             plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_EWM_hist.png'),dpi=300)
             plt.close()
 
+            #Plot pts regression
+            plt.figure(figsize=[15,5])
+            plt.plot(per_team_best_rolling_vals_runs_key,per_team_best_rolling_vals_runs,
+                     linestyle="",marker='*',markersize=5)
+            # plt.hist(per_team_best_rolling_vals_mean_pts, 
+            #          bins=range(min(per_team_best_rolling_vals_mean_pts_key), 
+            #                     max(per_team_best_rolling_vals_mean_pts_key)+2), rwidth=0.8, align='left')
+            # plt.xlabel('Value')
+            # plt.ylabel('Frequency')
+            # plt.title(f'{abv} Histogram pts regression MAPE. total games: {num_iter}')
+            # plt.xticks(range(min(per_team_best_rolling_vals_mean_pts_key), max(per_team_best_rolling_vals_mean_pts_key)+1))
+            # for rect in plt.gca().patches:
+            #     x = rect.get_x() + rect.get_width() / 2
+            #     y = rect.get_height()
+            #     plt.gca().annotate(f'{round(y/num_iter,2)}', (x, y), ha='center', va='bottom',fontsize=8)
+            plt.xlabel('rolling value')
+            plt.ylabel('RMSE of runs')
+            plt.savefig(join(getcwd(),'histogram_teams',f'{abv}_runs_hist.png'),dpi=300)
+            plt.close()
+
             #write best value to file - median
             counter = Counter(merged_list)
             most_frequent_value_median = counter.most_common(1)[0][0]
             #write best value to file - EWM
             counter = Counter(merged_list_mean)
             most_frequent_value_mean = counter.most_common(1)[0][0]
-            # best_value_dict = {f'{abv}': [most_frequent_value]}
+            #write best value to file - pts regressor
+            counter = Counter(per_team_best_rolling_vals_runs_key)
+            most_frequent_value_runs = counter.most_common(1)[0][0]
 
             # # Read existing data from the YAML file
             # try:
@@ -1059,10 +1158,14 @@ class mlbDeep():
             # final_df_median.to_csv('best_values.csv',index=False)
             final_dict[abv] = int(most_frequent_value_median)
             final_dict_mean[abv] = int(most_frequent_value_mean)
-        with open('best_values_median.yaml', 'w') as file:
-            yaml.dump(final_dict, file)
-        with open('best_values_mean.yaml', 'w') as file:
-            yaml.dump(final_dict, file)
+            final_dict_runs[abv] = int(most_frequent_value_runs)
+
+            with open('best_values_median.yaml', 'w') as file:
+                yaml.dump(final_dict, file)
+            with open('best_values_mean.yaml', 'w') as file:
+                yaml.dump(final_dict_mean, file)
+            with open('best_values_runs.yaml', 'w') as file:
+                yaml.dump(final_dict_runs, file)
         #Remove any duplicates from list
         save_betting_teams = list(set(save_betting_teams))
         print(f'teams that have the highest predictability: {save_betting_teams}')
@@ -1070,17 +1173,20 @@ class mlbDeep():
             for item in save_betting_teams:
                 file.write(item + "\n")
     
-    def test_each_team_classify_test(self):
+    def test_each_team_forecast(self):
         model = keras.models.load_model('deep_learning_mlb_class_test.h5')
         feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5',custom_objects={'mape_tf': mape_tf})
         with open('feature_xgb_model.pkl', 'rb') as file:
                 xgb_model = load(file)
         with open('feature_random_forest_model.pkl', 'rb') as file:
                 rf_model = load(file)
+        with open('feature_linear_regression.pkl', 'rb') as file:
+            lin_model = load(file)
         final_dict = {}
         final_dict_mean = {}
         save_betting_teams = []
         dnn_out = []
+        lin_out = 0
         
         count_teams = 1
         for abv in tqdm(sorted(self.teams_abv)):
@@ -1091,13 +1197,11 @@ class mlbDeep():
             for col in df_inst.columns:
                 df_inst[col].replace('', np.nan, inplace=True)
                 df_inst[col] = df_inst[col].astype(float)
+
             #Actual
             df_inst.dropna(inplace=True)
             game_result_series = df_inst['game_result']
             df_inst.drop(columns=self.drop_cols_manual,inplace=True)
-        #     range_data = np.arange(2,40)
-        #     per_team_best_rolling_vals = []
-        #     per_team_best_rolling_vals_mean = []
 
         #     #use ARIMA to estimate the next game values
             _, df_forecast_second = self.forecast_features(df_inst)
@@ -1106,6 +1210,8 @@ class mlbDeep():
             next_game_features_xgb = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             next_game_features_rf = rf_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             next_game_features_dnn = feature_regress_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
+            next_game_features_lin = lin_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
+
             dnn_list = []
             for val in next_game_features_dnn:
                 dnn_list.append(val[0][0])
@@ -1115,6 +1221,7 @@ class mlbDeep():
             prediction_median_xgb = model.predict(next_game_features_xgb)
             prediction_median_rf = model.predict(next_game_features_rf)
             prediction_median_dnn = model.predict(dnn_list)
+            prediction_median_lin = model.predict(next_game_features_lin)
             # next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             # print(next_game_features)
             #predict
@@ -1132,10 +1239,15 @@ class mlbDeep():
                 result_median_dnn = 1
             else:
                 result_median_dnn = 0
+            if prediction_median_lin[0][0] > 0.5:
+                result_median_lin = 1
+            else:
+                result_median_lin = 0
             # if int(ground_truth) == result_median:
             #     range_median = 1
             # else:
             #     range_median = 0
+
             ensemble = result_median_xgb + result_median_rf + result_median_dnn# + result_median_mlp + result_median_dt
             #all models
             if ensemble >=2:
@@ -1150,122 +1262,16 @@ class mlbDeep():
                 dnn_out.append(1)
             else:
                 dnn_out.append(0)
+            if int(ground_truth) == result_median_lin:
+                lin_out += 1
             print('=======================================')
             print(f'Prediction: {result_game} vs. Actual: {int(ground_truth)}')
             print('=======================================')
             print(f'Accuracy out of {count_teams} teams: {sum(save_betting_teams) / count_teams}')
             print(f'DNN Accuracy out of {count_teams} teams: {sum(dnn_out) / count_teams}')
+            print(f'LinRegress Accuracy out of {count_teams} teams: {lin_out / count_teams}')
             print('=======================================')
             count_teams += 1
-        # input()
-        #     #predict games
-        #     #iterate over every game 
-        #     num_iter = 0
-        #     for game in range(range_data[-1],len(df_inst)-1):
-        #         ground_truth = game_result_series.iloc[game+1]
-        #         dict_range_median = {}
-        #         dict_range_mean = {}
-        #         for roll_val in range_data:
-        #             data1_median = df_inst.iloc[0:game].rolling(roll_val).median()
-        #             data1_mean = df_inst.iloc[0:game].ewm(span=roll_val,min_periods=roll_val-1).mean()
-        #             X_std_1 = self.scaler.transform(data1_median.iloc[-1:])
-        #             X_std_1_mean = self.scaler.transform(data1_mean.iloc[-1:])
-        #             X_pca_1 = self.pca.transform(X_std_1)
-        #             X_pca_1_mean = self.pca.transform(X_std_1_mean)
-        #             team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-        #             team_1_df2023_mean = DataFrame(X_pca_1_mean, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-        #             prediction_median = model.predict(team_1_df2023.iloc[-1:])
-        #             prediction_mean = model.predict(team_1_df2023_mean.iloc[-1:])
-        #             #median prediction
-        #             if prediction_median[0][0] > 0.5:
-        #                 result_median = 1
-        #             else:
-        #                 result_median = 0
-        #             if int(ground_truth) == result_median:
-        #                 range_median = 1
-        #             else:
-        #                 range_median = 0
-        #             dict_range_median[roll_val] = [range_median]
-        #             #mean prediction
-        #             if prediction_mean[0][0] > 0.5:
-        #                 result_mean = 1
-        #             else:
-        #                 result_mean = 0
-        #             if int(ground_truth) == result_mean:
-        #                 range_mean = 1
-        #             else:
-        #                 range_mean = 0
-        #             dict_range_mean[roll_val] = [range_mean]
-        #         num_iter += 1
-        #         #extract keys that have a value of 1 
-        #         keys_with_value_one = [key for key, value in dict_range_median.items() if value == [1]]
-        #         keys_with_value_one_mean = [key for key, value in dict_range_mean.items() if value == [1]]
-        #         per_team_best_rolling_vals.append(keys_with_value_one)
-        #         per_team_best_rolling_vals_mean.append(keys_with_value_one_mean)
-        #     #remove empty sublists and combine into one list
-        #     merged_list = [item for sublist in per_team_best_rolling_vals if sublist for item in sublist]
-        #     merged_list_mean = [item for sublist in per_team_best_rolling_vals_mean if sublist for item in sublist]
-        #     print(f'Total number of games: {num_iter}')
-        #     #Plot median
-        #     plt.figure(figsize=[15,5])
-        #     plt.hist(merged_list, bins=range(min(merged_list), max(merged_list)+2), rwidth=0.8, align='left')
-        #     plt.xlabel('Value')
-        #     plt.ylabel('Frequency')
-        #     plt.title(f'{abv} Histogram Median. total games: {num_iter}')
-        #     plt.xticks(range(min(merged_list), max(merged_list)+1))
-        #     for rect in plt.gca().patches:
-        #         x = rect.get_x() + rect.get_width() / 2
-        #         y = rect.get_height()
-        #         prop = round(y/num_iter,2)
-        #         if prop >= 0.7:
-        #             save_betting_teams.append(abv)
-        #         plt.gca().annotate(f'{prop}', (x, y), ha='center', va='bottom',fontsize=8)
-        #     plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_median_hist.png'),dpi=300)
-        #     plt.close()
-
-        #     #Plot mean
-        #     plt.figure(figsize=[15,5])
-        #     plt.hist(merged_list_mean, bins=range(min(merged_list_mean), max(merged_list_mean)+2), rwidth=0.8, align='left')
-        #     plt.xlabel('Value')
-        #     plt.ylabel('Frequency')
-        #     plt.title(f'{abv} Histogram EWM. total games: {num_iter}')
-        #     plt.xticks(range(min(merged_list_mean), max(merged_list_mean)+1))
-        #     for rect in plt.gca().patches:
-        #         x = rect.get_x() + rect.get_width() / 2
-        #         y = rect.get_height()
-        #         plt.gca().annotate(f'{round(y/num_iter,2)}', (x, y), ha='center', va='bottom',fontsize=8)
-        #     plt.savefig(os.path.join(os.getcwd(),'histogram_teams',f'{abv}_EWM_hist.png'),dpi=300)
-        #     plt.close()
-
-        #     #write best value to file - median
-        #     counter = Counter(merged_list)
-        #     most_frequent_value_median = counter.most_common(1)[0][0]
-        #     #write best value to file - EWM
-        #     counter = Counter(merged_list_mean)
-        #     most_frequent_value_mean = counter.most_common(1)[0][0]
-        #     # best_value_dict = {f'{abv}': [most_frequent_value]}
-
-        #     # # Read existing data from the YAML file
-        #     # try:
-        #     #     final_df_median = read_csv('best_values.csv')
-        #     # except FileNotFoundError:
-        #     #     pass
-        #     # # Update existing data with new data
-        #     # final_df_median = concat([final_df_median, DataFrame(best_value_dict)])
-        #     # # Write the updated data to the YAML file
-        #     # final_df_median.to_csv('best_values.csv',index=False)
-        #     final_dict[abv] = int(most_frequent_value_median)
-        #     final_dict_mean[abv] = int(most_frequent_value_mean)
-        # with open('best_values_median.yaml', 'w') as file:
-        #     yaml.dump(final_dict, file)
-        # with open('best_values_mean.yaml', 'w') as file:
-        #     yaml.dump(final_dict, file)
-        # #Remove any duplicates from list
-        # save_betting_teams = list(set(save_betting_teams))
-        # print(f'teams that have the highest predictability: {save_betting_teams}')
-        # with open("betting_teams.txt", "w") as file:
-        #     for item in save_betting_teams:
-        #         file.write(item + "\n")
     
     def forecast_features(self,game_data):
         #standardize and PCA
@@ -1290,8 +1296,8 @@ class mlbDeep():
             self.deep_learn()
             self.deep_learn_regress()
             self.deep_learn_features()
-            self.test_each_team_classify_test()
             self.test_each_team_classify()
+            self.test_each_team_forecast()
         else:
             self.get_teams()
             self.split()
