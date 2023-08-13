@@ -430,7 +430,6 @@ class mlbDeep():
             best_model.summary()
             hyperparams = best_hyperparameters.values
             print(hyperparams)
-            input()
             # Define the input layer In Multi-Task Learning approach
             inputs = Input(shape=(x_train.shape[1],))
 
@@ -586,6 +585,8 @@ class mlbDeep():
                 xgb_model = load(file)
         with open('feature_random_forest_model.pkl', 'rb') as file:
                 rf_model = load(file)
+        with open('feature_linear_regression.pkl', 'rb') as file:
+                lin_model = load(file)
         while True:
             try:
                 print(f'ALL TEAMS: {sorted(self.teams_abv)}')
@@ -718,6 +719,8 @@ class mlbDeep():
                 next_game_features_rf_2 = rf_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
                 next_game_features_dnn_1 = feature_regress_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
                 next_game_features_dnn_2 = feature_regress_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
+                lin_features_1 = lin_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
+                lin_features_2 = lin_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
                 #reshape DNN
                 dnn_list_1 = []
                 for val in next_game_features_dnn_1:
@@ -739,6 +742,8 @@ class mlbDeep():
                 prediction_median_rf_2 = self.model.predict(next_game_features_rf_2)
                 prediction_median_dnn_1 = self.model.predict(dnn_list_1)
                 prediction_median_dnn_2 = self.model.predict(dnn_list_2)
+                prediction_median_lin_1 = self.model.predict(lin_features_1)
+                prediction_median_lin_2 = self.model.predict(lin_features_2)
                 # next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
                 # print(next_game_features)
                 #predict
@@ -833,6 +838,8 @@ class mlbDeep():
                 elif num_true_conditions_team2 >= 2:
                     print(f'{self.team_1} Predicted Winning Probability: {round(prediction_median_xgb_1[0][0]*100,2)}% XGB, {round(prediction_median_rf_1[0][0]*100,2)}% RF, {round(prediction_median_dnn_1[0][0]*100,2)}% DNN')
                     print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN' + Style.RESET_ALL)
+                print(f'{self.team_1} Predicted Winning Probability: {round(prediction_median_lin_1[0][0]*100,2)}% LinRegress')
+                print(f'{self.team_2} Predicted Winning Probability: {round(prediction_median_lin_2[0][0]*100,2)}% LinRegress')
                 print('====================================')
                 if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
                     print('Game will be close.')
