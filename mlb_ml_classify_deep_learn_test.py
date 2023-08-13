@@ -28,7 +28,7 @@ from keras.callbacks import TensorBoard, EarlyStopping
 # from datetime import datetime, timedelta
 # from sklearn.metrics import roc_curve
 import seaborn as sns
-from sklearn.decomposition import PCA
+from sklearn.decomposition import FactorAnalysis#PCA
 import warnings
 import os
 import yaml
@@ -45,8 +45,9 @@ from tensorflow.keras.regularizers import l2, l1
 from sklearn.linear_model import LinearRegression
 from psutil import virtual_memory
 from sys import exit
-# from sklearn.neighbors import RadiusNeighborsRegressor
-# Ignore the warning
+from keras.optimizers import Adam, RMSprop
+import kerastuner as kt
+from kerastuner.tuners import RandomSearch
 warnings.filterwarnings("ignore")
 
 """
@@ -83,6 +84,67 @@ def rmse(y_true,y_pred):
 def check_ram_usage():
     ram_percent = virtual_memory().percent
     return ram_percent > 98
+
+def create_model_classifier(hp):
+    optimizer = hp.Choice('optimizer', ['adam', 'rmsprop'])
+    unit_size = hp.Int('units', min_value=5, max_value=100, step=5)
+    learning_rate = hp.Float('learning_rate', min_value=1e-4, max_value=1e-2, sampling='log')
+    dropout_rate = hp.Float('dropout_rate', min_value=0.0, max_value=0.5, step=0.1)
+    # l1_regularizer = hp.Float('l1_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
+    l2_regularizer = hp.Float('l2_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
+
+    inputs = Input(shape=(35,))
+
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(inputs)
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    # shared_hidden_layer = Dense(units, activation='relu')(inputs)
+    # shared_hidden_layer = Dense(units, activation='tanh')(shared_hidden_layer)
+    # shared_hidden_layer = Dense(units, activation='relu')(shared_hidden_layer)
+    # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+
+    output_layers = []
+    for i in range(35):
+        output_layer = Dense(1, activation='tanh', name=f'target_{i+1}')(shared_hidden_layer)
+        output_layers.append(output_layer)
+
+    if optimizer == 'adam':
+        optimizer = Adam(learning_rate=learning_rate)
+    else:
+        optimizer = RMSprop(learning_rate=learning_rate)
+    model = Model(inputs=inputs, outputs=output_layers)
+    model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mse'])
+
+    return model
 
 class mlbDeep():
     def __init__(self):
@@ -198,16 +260,19 @@ class mlbDeep():
         X_std = self.scaler.fit_transform(self.x)
         X_std_regress = self.scaler_regress.fit_transform(self.x_regress)
         #PCA data down to 95% explained variance
-        self.pca = PCA(n_components=0.95)
-        self.pca_regress = PCA(n_components=0.95)
+        self.manual_components = 35
+        self.pca = FactorAnalysis(n_components=self.manual_components)
+        self.pca_regress = FactorAnalysis(n_components=self.manual_components)
+        # self.pca = PCA(n_components=0.95)
+        # self.pca_regress = PCA(n_components=0.95)
         X_pca = self.pca.fit_transform(X_std)
         X_pca_regress = self.pca_regress.fit_transform(X_std_regress)
 
         # Check the number of components that were retained
-        print('Number of components Classifier:', self.pca.n_components_)
-        print('Number of components Regressor:', self.pca_regress.n_components_)
-        self.x_data = DataFrame(X_pca, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-        self.x_data_regress = DataFrame(X_pca_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+        print('Number of components Classifier:', len(self.pca.components_))
+        print('Number of components Regressor:', len(self.pca_regress.components_))
+        self.x_data = DataFrame(X_pca, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
+        self.x_data_regress = DataFrame(X_pca_regress, columns=[f'PC{i}' for i in range(1, len(self.pca_regress.components_)+1)])
 
         #split into training and validation
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.x_data, self.y, train_size=0.8)
@@ -349,92 +414,64 @@ class mlbDeep():
             self.model_feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5',custom_objects={'mape_tf': mape_tf})
         else:
             #best params
-            # 1.32 mse first try - 56% acc on test
-            # 1.337 mse second try - 56% acc on test
-            # 1.331 mse third try - 46% acc on test
-            # 1.341 mse fourth try - 43% acc on test
-            # 1.355 mse fifth try - 46% acc on test
-            # 1.335 mse sixth try - 50% acc on test
-            # 1.337 mse seventh try - 60% acc on test
-            # 1.332 mse 8th try - 56% acc on test
-            # Best: 0.999925 using {'alpha': 0.1, 'batch_size': 32, 'dropout_rate': 0.2,
-            #  'learning_rate': 0.001, 'neurons': 16}
-            optimizer = keras.optimizers.Adam(learning_rate=0.001,
-                                            #   kernel_regularizer=regularizers.l2(0.001)
-                                              )
-            # self.model_feature_regress_model = keras.Sequential([
-            #         layers.Dense(17, activation='relu', input_shape=(x_train.shape[1],)),
-            #         # layers.LeakyReLU(alpha=0.2),
-            #         layers.BatchNormalization(),
-            #         layers.Dropout(0.2),
-            #         layers.Dense(17, activation='relu'),
-            #         # layers.LeakyReLU(alpha=0.2),
-            #         layers.BatchNormalization(),
-            #         layers.Dropout(0.2),
-            #         layers.Dense(17, activation='relu'),
-            #         # layers.LeakyReLU(alpha=0.2),
-            #         layers.BatchNormalization(),
-            #         layers.Dropout(0.2),
-            #         layers.Dense(17, activation='relu'),
-            #         # layers.LeakyReLU(alpha=0.2),
-            #         layers.BatchNormalization(),
-            #         layers.Dropout(0.2),
-            #         layers.Dense(y_train.shape[1], activation='relu')
-            #     ])
-            # self.model_feature_regress_model.compile(optimizer=optimizer,
-            #     loss='mean_squared_error',
-            #     metrics=[mape_tf]
-            #     # metrics=['mse']
-            #     )
-            # print('Training Feature Regressor')
-            # self.model_feature_regress_model.summary()
-            # #run this to see the tensorBoard: tensorboard --logdir=./logs
-            # # tensorboard_callback = TensorBoard(log_dir="./logs")
-            # early_stop = EarlyStopping(monitor='val_loss', patience=100, mode='min', verbose=1)
-            # history = self.model_feature_regress_model.fit(x_train,y_train,epochs=500, batch_size=128, verbose=2,
-            #                         validation_data=(x_test,y_test),callbacks=[early_stop]) 
-            # final_mse_dnn = history.history['val_mape_tf'][-1]
-            # self.model_feature_regress_model.save('feature_deep_learning_mlb_regress_test.h5')
-            # input()
+            #FIND BEST PARAMETERS
+            tuner = RandomSearch(
+                create_model_classifier,
+                objective='val_loss',
+                max_trials=10,
+                directory='tuner_results_classifier',
+                project_name='model_tuning')
+            tuner.search_space_summary()
+            tuner.search(x_train, y_train, validation_data=(x_test, y_test), epochs=150)
+
+            # Get the best model and summary of the best hyperparameters
+            best_model = tuner.get_best_models(num_models=1)[0]
+            best_hyperparameters = tuner.get_best_hyperparameters(num_trials=1)[0]
+            best_model.summary()
+            hyperparams = best_hyperparameters.values
+            print(hyperparams)
+            input()
             # Define the input layer In Multi-Task Learning approach
             inputs = Input(shape=(x_train.shape[1],))
 
             # Shared hidden layers 
-            unit_size = int(x_train.shape[1] / 2)
-            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(inputs)
-            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            unit_size = hyperparams['units']#int(x_train.shape[1] / 2)
+            dropout_rate = hyperparams['dropout_rate']
+            regularize = hyperparams['l2_regularizer']
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(inputs)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l1(0.01))(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
             shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
-            # shared_hidden_layer = Dense(unit_size, activation='relu')(shared_hidden_layer)
-            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
-            # shared_hidden_layer = Dropout(0.2)(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
 
             # Task-specific output layers
             output_layers = []
@@ -444,29 +481,32 @@ class mlbDeep():
 
             # Create the multi-task learning model
             self.model_feature_regress_model = Model(inputs=inputs, outputs=output_layers)
-
+            if hyperparams['optimizer'] == 'adam':
+                optimizer = Adam(learning_rate=hyperparams['learning_rate'])
+            else:
+                optimizer = RMSprop(learning_rate=hyperparams['learning_rate'])
             # Compile the model
-            self.model_feature_regress_model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=[mape_tf])
+            self.model_feature_regress_model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mse'])
 
             #Summary
             self.model_feature_regress_model.summary()
-            lr_scheduler = LearningRateScheduler(step_decay)
-            early_stop = EarlyStopping(monitor='val_loss', patience=200, mode='min', verbose=1)
+            # lr_scheduler = LearningRateScheduler(step_decay)
+            early_stop = EarlyStopping(monitor='val_loss', patience=50, mode='min', verbose=1)
             # Train the model
             # tensorboard_callback = TensorBoard(log_dir="./logs")
-            y_train_array = y_train.values
+            # y_train_array = y_train.values
             history = self.model_feature_regress_model.fit(x_train, 
-                      [y_train_array[:, i] for i in range(x_train.shape[1])], 
+                      y_train, 
                       epochs=500, 
                       batch_size=128, 
                       validation_data=(x_test,y_test), 
                       verbose=2,
-                      callbacks=[lr_scheduler,early_stop])
+                      callbacks=[early_stop])
             self.model_feature_regress_model.save('feature_deep_learning_mlb_regress_test.h5')
             plt.figure(figsize=(15,15))
             save_each_label_error = []
             for i in range(1,x_train.shape[1]+1):
-                col_name = f"val_target_{i}_mape_tf"
+                col_name = f"val_target_{i}_mse"
                 plt.plot(history.history[col_name],color='grey',alpha=0.4) #,label=col_name
                 save_each_label_error.append(history.history[col_name])
             # Convert the list of lists into a NumPy array
@@ -596,8 +636,8 @@ class mlbDeep():
 
                 # team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
                 # team_2_df2023 = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-                team_1_df2023_regress = DataFrame(X_pca_1_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
-                team_2_df2023_regress = DataFrame(X_pca_2_regress, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+                team_1_df2023_regress = DataFrame(X_pca_1_regress, columns=[f'PC{i}' for i in range(1, len(self.pca_regress.components_)+1)])
+                team_2_df2023_regress = DataFrame(X_pca_2_regress, columns=[f'PC{i}' for i in range(1, len(self.pca_regress.components_)+1)])
         
                 #avoid dropping column issue
                 # data1_mean = DataFrame()
@@ -622,8 +662,8 @@ class mlbDeep():
                     X_std_2 = self.scaler.transform(team_2_df2023_roll) 
                     X_pca_1 = self.pca.transform(X_std_1)
                     X_pca_2 = self.pca.transform(X_std_2)
-                    data1_mean = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-                    data2_mean = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                    data1_mean = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
+                    data2_mean = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
                     # print(data1_mean)
                     #regress
                     data1_mean_regress = team_1_df2023_regress.rolling(int(best_values[self.team_1])).median()
@@ -678,7 +718,6 @@ class mlbDeep():
                 next_game_features_rf_2 = rf_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
                 next_game_features_dnn_1 = feature_regress_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
                 next_game_features_dnn_2 = feature_regress_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
-
                 #reshape DNN
                 dnn_list_1 = []
                 for val in next_game_features_dnn_1:
@@ -808,150 +847,6 @@ class mlbDeep():
             except:
                 print('Try again')
 
-    # def test_ma(self):
-    #     # final_list = []
-    #     model = keras.models.load_model('deep_learning_mlb_class_test.h5')
-    #     model_regress = keras.models.load_model('deep_learning_mlb_regress_test.h5')
-    #     final_df_mean = DataFrame()
-    #     final_df_median = DataFrame()
-    #     final_df_mean_regress = DataFrame()
-    #     final_df_median_regress = DataFrame()
-    #     #load current day teams
-    #     team_names = read_csv('teams_curr_day.csv')
-    #     collapsed_list = team_names['Team_1'].tolist() + team_names['Team_1'].tolist()
-    #     for abv in tqdm(sorted(collapsed_list)):
-    #         # try:
-    #         print() #tqdm things
-    #         print(f'current team: {abv}, year: {2023}')
-    #         df_inst = web_scrape_mlb.get_data_team(abv,2023)
-    #         # df_inst.drop(columns=self.drop_cols, inplace=True)
-    #         for col in df_inst.columns:
-    #             df_inst[col].replace('', np.nan, inplace=True)
-    #             df_inst[col] = df_inst[col].astype(float)
-    #         #Actual
-    #         game_result_series = df_inst['game_result']
-    #         game_score_series = df_inst['RS']
-    #         df_inst.drop(columns=self.drop_cols_manual,inplace=True)
-    #         df_inst.dropna(inplace=True)
-    #         df_inst_regress = df_inst.drop(columns=["RS"])
-
-    #         #PCA and standardize
-    #         X_std_1 = self.scaler.transform(df_inst)
-    #         X_std_1_regress = self.scaler_regress.transform(df_inst_regress)
-    #         X_pca_1 = self.pca.transform(X_std_1)
-    #         X_pca_1_regress = self.pca_regress.transform(X_std_1_regress)
-    #         team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-    #         team_1_df2023_regress = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
-            
-    #         ma_range = np.arange(2,len(team_1_df2023)-1)
-    #         dict_range_mean_regress = {}
-    #         dict_range_median_regress = {}
-    #         dict_range_mean = {}
-    #         dict_range_median = {}
-    #         for ma in ma_range:
-    #             #Get rolling mean and medians
-    #             data1_mean = team_1_df2023.iloc[0:-1].ewm(span=ma,min_periods=ma-1).mean()
-    #             data1_mean_regress = team_1_df2023_regress.iloc[0:-1].ewm(span=ma,min_periods=ma-1).mean()
-    #             data1_median = team_1_df2023.iloc[0:-1].rolling(ma).median()
-    #             data1_median_regress = team_1_df2023_regress.iloc[0:-1].rolling(ma).median()
-    #             #Predict
-    #             prediction_mean = model.predict(data1_mean.iloc[-1:])
-    #             prediction_median = model.predict(data1_median.iloc[-1:])
-    #             prediction_mean_regress = model_regress.predict(data1_mean_regress.iloc[-1:])
-    #             prediction_median_regress = model_regress.predict(data1_median_regress.iloc[-1:])
-    #             #classification
-    #             if prediction_mean[0][0] > 0.5:
-    #                 result_mean = 1
-    #             else:
-    #                 result_mean = 0
-    #             if prediction_median[0][0] > 0.5:
-    #                 result_median = 1
-    #             else:
-    #                 result_median = 0
-    #             if int(game_result_series.iloc[-1]) == result_mean:
-    #                 range_mean = 1
-    #             else:
-    #                 range_mean = 0
-    #             if int(game_result_series.iloc[-1]) == result_median:
-    #                 range_median = 1
-    #             else:
-    #                 range_median = 0
-    #             dict_range_mean[ma] = [range_mean]
-    #             dict_range_median[ma] = [range_median]
-    #             #Regression
-    #             diff_mean_regress = abs(prediction_mean_regress[0][0] - game_score_series.iloc[-1])
-    #             diff_median_regress = abs(prediction_median_regress[0][0] - game_score_series.iloc[-1])
-    #             print(f'mean diff :{diff_mean_regress}')
-    #             print(f'median diff :{diff_median_regress}')
-    #             dict_range_mean_regress[ma] = [diff_mean_regress]
-    #             dict_range_median_regress[ma] = [diff_median_regress]
-
-    #         final_df_mean = concat([final_df_mean, DataFrame(dict_range_mean)])
-    #         final_df_median = concat([final_df_median, DataFrame(dict_range_median)])
-    #         final_df_mean_regress = concat([final_df_mean_regress, DataFrame(dict_range_mean_regress)])
-    #         final_df_median_regress = concat([final_df_median_regress, DataFrame(dict_range_median_regress)])
-    #         # print(final_df_mean)
-    #         # print(final_df_mean.dropna(axis=1))
-    #         sleep(3)
-        
-    #     #Regression
-    #     final_df_mean_regress = final_df_mean_regress.dropna(axis=1)
-    #     final_df_median_regress = final_df_median_regress.dropna(axis=1)
-    #     column_sums_mean_regress = final_df_mean_regress.sum(axis=0)
-    #     column_sums_median_regress = final_df_median_regress.sum(axis=0)
-
-    #     sorted_columns_regress_mean = column_sums_mean_regress.sort_values(ascending=True)
-    #     sorted_columns_regress_median = column_sums_median_regress.sort_values(ascending=True)
-
-    #     print(f'Mean Regression columns: {sorted_columns_regress_mean}')
-    #     print(f'Median Regression columns: {sorted_columns_regress_median}')
-                
-    #     final_df_mean = final_df_mean.dropna(axis=1)
-    #     final_df_median = final_df_median.dropna(axis=1)
-    #     column_sums_mean = final_df_mean.sum(axis=0)
-    #     column_sums_median = final_df_median.sum(axis=0)
-    #     proportions_mean = column_sums_mean / len(final_df_mean)
-    #     proportions_median = column_sums_median / len(final_df_median)
-
-    #     sorted_columns = column_sums_mean.sort_values(ascending=False)
-    #     # Print the sorted columns
-    #     print(f'mean sorted values: {sorted_columns}')
-
-    #     #print each mean and median percentage correct
-    #     print(f'mean percent correct: {(sorted_columns.iloc[0] / len(collapsed_list))*100}')
-
-    #     sorted_columns = column_sums_median.sort_values(ascending=False)
-    #     # Print the sorted columns
-    #     print(f'median sorted values: {sorted_columns}')
-    #     print('=========')
-    #     print(sorted_columns.iloc[0])
-
-    #     #print each mean and median percentage correct
-    #     print(f'median percent correct: {(sorted_columns.iloc[0] / len(collapsed_list))*100}')
-    
-    #     #plot the summed values of correct 
-    #     plt.figure()
-    #     plt.bar(final_df_mean.columns, proportions_mean)
-    #     plt.xlabel('Column')
-    #     plt.ylabel('Proportion')
-    #     plt.title('Proportions of Summed Values - Mean')
-    #     plt.xticks(rotation=90)
-    #     plt.savefig('best_mean_ma.png',dpi=350)
-    #     plt.figure()
-    #     plt.bar(final_df_median.columns, proportions_median)
-    #     plt.xlabel('Column')
-    #     plt.ylabel('Proportion')
-    #     plt.title('Proportions of Summed Values - Median')
-    #     plt.xticks(rotation=90)
-    #     plt.savefig('best_median_ma.png',dpi=350)
-
-    #     # final_list.append(df_inst)
-    #     #     except Exception as e:
-    #     #         print(e)
-    #     #         print(f'{abv} data are not available')
-    #     #     sleep(4) #I get get banned for a small period of time if I do not do this
-    #     # final_test_data = concat(final_list)
-
     def test_each_team_classify(self):
         #only include the teams that have not been included yet 
         if exists('best_values_runs.yaml'):
@@ -1027,15 +922,15 @@ class mlbDeep():
                     X_std_1_mean = self.scaler.transform(data1_mean.iloc[-1:])
                     X_pca_1 = self.pca.transform(X_std_1)
                     X_pca_1_mean = self.pca.transform(X_std_1_mean)
-                    team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
-                    team_1_df2023_mean = DataFrame(X_pca_1_mean, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+                    team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
+                    team_1_df2023_mean = DataFrame(X_pca_1_mean, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
                     prediction_median = model.predict(team_1_df2023.iloc[-1:])
                     prediction_mean = model.predict(team_1_df2023_mean.iloc[-1:])
 
                     #apply standardization and PCA - Regressor 
                     X_std_runs = self.scaler_regress.transform(data_runs.iloc[-1:])
                     X_pca_runs = self.pca_regress.transform(X_std_runs)
-                    team_1_runs = DataFrame(X_pca_runs, columns=[f'PC{i}' for i in range(1, self.pca_regress.n_components_+1)])
+                    team_1_runs = DataFrame(X_pca_runs, columns=[f'PC{i}' for i in range(1, len(self.pca_regress.components_)+1)])
                     prediction_runs = model_regress.predict(team_1_runs.iloc[-1:])
 
                     #Regression error 
@@ -1277,7 +1172,7 @@ class mlbDeep():
         #standardize and PCA
         X_std_1 = self.scaler.transform(game_data)
         X_pca_1 = self.pca.transform(X_std_1)
-        team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+        team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
         # # Train a VAR model
         # model = VAR(team_1_df2023)
         # model_fit = model.fit()
