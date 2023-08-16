@@ -260,7 +260,8 @@ class mlbDeep():
         X_std = self.scaler.fit_transform(self.x)
         X_std_regress = self.scaler_regress.fit_transform(self.x_regress)
         #PCA data down to 95% explained variance
-        self.manual_components = 35
+        print(f'number of features: {len(self.x.columns)}')
+        self.manual_components = len(self.x.columns) - 2 # 35
         self.pca = FactorAnalysis(n_components=self.manual_components)
         self.pca_regress = FactorAnalysis(n_components=self.manual_components)
         # self.pca = PCA(n_components=0.95)
@@ -1089,7 +1090,8 @@ class mlbDeep():
         save_betting_teams = []
         dnn_out = []
         lin_out = 0
-        
+        rf_out = 0
+        xgb_out = 0 
         count_teams = 1
         for abv in tqdm(sorted(self.teams_abv)):
         #     # try:
@@ -1166,12 +1168,18 @@ class mlbDeep():
                 dnn_out.append(0)
             if int(ground_truth) == result_median_lin:
                 lin_out += 1
+            if int(ground_truth) == result_median_rf:
+                rf_out += 1
+            if int(ground_truth) == result_median_xgb:
+                xgb_out += 1
             print('=======================================')
             print(f'Prediction: {result_game} vs. Actual: {int(ground_truth)}')
             print('=======================================')
             print(f'Accuracy out of {count_teams} teams: {sum(save_betting_teams) / count_teams}')
             print(f'DNN Accuracy out of {count_teams} teams: {sum(dnn_out) / count_teams}')
             print(f'LinRegress Accuracy out of {count_teams} teams: {lin_out / count_teams}')
+            print(f'RandomForest Accuracy out of {count_teams} teams: {rf_out / count_teams}')
+            print(f'XGB Accuracy out of {count_teams} teams: {xgb_out / count_teams}')
             print('=======================================')
             count_teams += 1
     

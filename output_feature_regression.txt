@@ -1,1 +1,1 @@
-all scores MAPE: DNN - 199.84844970703125, xgb - -557.5976696302828, random forest - -389.14350004555985
+all scores MAPE: DNN - 0.5976297855377197, xgb - -inf, random forest - -175.5705642351692, lin regrss - nan

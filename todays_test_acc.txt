@@ -1,0 +1,6 @@
+Accuracy out of 30 teams: 0.6
+DNN Accuracy out of 30 teams: 0.5
+LinRegress Accuracy out of 30 teams: 0.43333333333333335
+RandomForest Accuracy out of 30 teams: 0.6
+XGB Accuracy out of 30 teams: 0.5666666666666667
+
