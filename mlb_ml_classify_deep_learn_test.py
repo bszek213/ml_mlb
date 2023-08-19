@@ -2,8 +2,8 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from keras.models import Model
-from keras.layers import Input, Dense, Dropout, BatchNormalization
+from keras.models import Model, Sequential
+from keras.layers import Input, Dense, Dropout, BatchNormalization, LSTM
 # from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from keras import regularizers
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
@@ -46,7 +46,7 @@ from sklearn.linear_model import LinearRegression
 from psutil import virtual_memory
 from sys import exit
 from keras.optimizers import Adam, RMSprop
-import kerastuner as kt
+import keras_tuner as kt
 from kerastuner.tuners import RandomSearch
 warnings.filterwarnings("ignore")
 
@@ -93,7 +93,7 @@ def create_model_classifier(hp):
     # l1_regularizer = hp.Float('l1_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
     l2_regularizer = hp.Float('l2_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
 
-    inputs = Input(shape=(35,))
+    inputs = Input(shape=(50,))
 
     shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(inputs)
     shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
@@ -133,7 +133,7 @@ def create_model_classifier(hp):
     # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
 
     output_layers = []
-    for i in range(35):
+    for i in range(50):
         output_layer = Dense(1, activation='tanh', name=f'target_{i+1}')(shared_hidden_layer)
         output_layers.append(output_layer)
 
@@ -145,6 +145,86 @@ def create_model_classifier(hp):
     model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mse'])
 
     return model
+
+def create_model_regressor(hp):
+    optimizer = hp.Choice('optimizer', ['adam', 'rmsprop'])
+    unit_size = hp.Int('units', min_value=5, max_value=100, step=5)
+    learning_rate = hp.Float('learning_rate', min_value=1e-4, max_value=1e-2, sampling='log')
+    dropout_rate = hp.Float('dropout_rate', min_value=0.0, max_value=0.5, step=0.1)
+    # l1_regularizer = hp.Float('l1_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
+    l2_regularizer = hp.Float('l2_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
+
+    inputs = Input(shape=(50,))
+
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(inputs)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    # shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
+    # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+    # shared_hidden_layer = Dense(units, activation='relu')(inputs)
+    # shared_hidden_layer = Dense(units, activation='tanh')(shared_hidden_layer)
+    # shared_hidden_layer = Dense(units, activation='relu')(shared_hidden_layer)
+    # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+    # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+
+    output_layers = []
+    for i in range(50):
+        output_layer = Dense(1, activation='tanh', name=f'target_{i+1}')(shared_hidden_layer)
+        output_layers.append(output_layer)
+
+    if optimizer == 'adam':
+        optimizer = Adam(learning_rate=learning_rate)
+    else:
+        optimizer = RMSprop(learning_rate=learning_rate)
+    model = Model(inputs=inputs, outputs=output_layers)
+    model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mse'])
+
+    return model
+
+def create_sequences(x_data,sequence_length):
+    x_lstm_sequences = []
+    y_lstm_sequences = []
+
+    # Loop through your data to create sequences
+    for i in range(len(x_data) - sequence_length + 1):
+        x_sequence = x_data.iloc[i:i+sequence_length-1]  # Take two consecutive rows for x
+        y_sequence = x_data.iloc[i+sequence_length-1]    # Take the next row for y
+        
+        x_lstm_sequences.append(x_sequence)
+        y_lstm_sequences.append(y_sequence)
+
+    x_lstm = np.array(x_lstm_sequences)
+    y_lstm = np.array(y_lstm_sequences)
+
+    return x_lstm, y_lstm
 
 class mlbDeep():
     def __init__(self):
@@ -261,7 +341,7 @@ class mlbDeep():
         X_std_regress = self.scaler_regress.fit_transform(self.x_regress)
         #PCA data down to 95% explained variance
         print(f'number of features: {len(self.x.columns)}')
-        self.manual_components = len(self.x.columns) - 2 # 35
+        self.manual_components = len(self.x.columns) - 2 #50 features currently.  35
         self.pca = FactorAnalysis(n_components=self.manual_components)
         self.pca_regress = FactorAnalysis(n_components=self.manual_components)
         # self.pca = PCA(n_components=0.95)
@@ -381,19 +461,55 @@ class mlbDeep():
     def deep_learn_features(self):
         # mse_scorer = make_scorer(mean_squared_error)
         mse_scorer = make_scorer(mape, greater_is_better=False)
+
         #split data
         # Separate odd and even rows
         x_data = self.x_data.iloc[::2]  # Odd rows
         y_data = self.x_data.iloc[1::2]  # Even rows
+
         # Adjust lengths if necessary
         if len(x_data) > len(y_data):
             x_data = x_data[:-1]  # Remove last row from x_train
         elif len(y_data) > len(x_data):
             y_data = y_data[:-1]  # Remove last row from y_train
         x_train, x_test, y_train, y_test = train_test_split(x_data, y_data, train_size=0.8)
+
+        # Separate odd and even rows REGRESSION
+        x_data_regress= self.x_data_regress.iloc[::2]  # Odd rows
+        y_data_regress = self.x_data_regress.iloc[1::2]  # Even rows
+        # Adjust lengths if necessary
+        if len(x_data_regress) > len(y_data_regress):
+            x_data_regress = x_data_regress[:-1]  # Remove last row from x_train
+        elif len(y_data_regress) > len(x_data_regress):
+            y_data_regress = y_data_regress[:-1]  # Remove last row from y_train
+        x_train_regress, x_test_regress, y_train_regress, y_test_regress = train_test_split(x_data_regress, y_data_regress, train_size=0.8)
         
+        #LSTM 
+        if not exists('feature_LSTM.h5'):
+            seq_length = 2 
+            x_lstm, y_lstm  = create_sequences(self.x_data,seq_length)
+            # print(self.x_data)
+            # print('====')
+            # print(x_lstm)
+            # print('====')
+            # print(y_lstm)
+            # print('====')
+            # input()
+            x_train_lstm, x_val_lstm, y_train_lstm, y_val_lstm = train_test_split(x_lstm, y_lstm, test_size=0.2, random_state=42)
+            # Define your LSTM model
+            model = Sequential()
+            model.add(LSTM(units=50, input_shape=(1, 50), return_sequences=True))  # Input shape excludes the last row in each sequence
+            model.add(LSTM(units=50,return_sequences=False))
+            model.add(Dense(units=50))  # Output layer
+
+            # Compile the model
+            model.compile(optimizer='adam', loss='mean_squared_error')
+
+            # Train the model using your formatted sequences
+            model.fit(x_train_lstm, y_train_lstm, validation_data=(x_val_lstm,y_val_lstm), epochs=100, batch_size=128, verbose=2)
+            model.save('feature_LSTM.h5')
         #linear regression
-        if not  exists('feature_linear_regression.pkl'):
+        if not exists('feature_linear_regression.pkl'):
             lin_model = LinearRegression().fit(x_train,y_train)
             y_pred = lin_model.predict(x_test)
             y_test_np = y_test.to_numpy()
@@ -410,6 +526,7 @@ class mlbDeep():
             with open('feature_linear_regression.pkl', 'wb') as file:
                     dump(lin_model, file)
 
+        #FEATURE REGRESSOR FOR CLASSIFICATION
         if exists('feature_deep_learning_mlb_regress_test.h5'):
             print('load trained feature regression model')
             self.model_feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5',custom_objects={'mape_tf': mape_tf})
@@ -519,6 +636,119 @@ class mlbDeep():
             plt.legend()
             plt.savefig('Multi_Task_learning_output.png',dpi=350)
             plt.close()
+
+        #FEATURE REGRESSOR FOR REGRESSION
+        if exists('feature_deep_learning_mlb_regress_runs.h5'):
+            self.model_feature_regress_model_regress = keras.models.load_model('feature_deep_learning_mlb_regress_runs.h5')
+        else:
+            #best params
+            #FIND BEST PARAMETERS
+            tuner = RandomSearch(
+                create_model_regressor,
+                objective='val_loss',
+                max_trials=10,
+                directory='tuner_results_regressor',
+                project_name='model_tuning')
+            tuner.search_space_summary()
+            tuner.search(x_train_regress, y_train_regress, validation_data=(x_test_regress, y_test_regress), epochs=150)
+
+            # Get the best model and summary of the best hyperparameters
+            best_model = tuner.get_best_models(num_models=1)[0]
+            best_hyperparameters = tuner.get_best_hyperparameters(num_trials=1)[0]
+            best_model.summary()
+            hyperparams = best_hyperparameters.values
+            print(hyperparams)
+            print(x_train.shape[1])
+            # Define the input layer In Multi-Task Learning approach
+            inputs = Input(shape=(x_train.shape[1],))
+
+            # Shared hidden layers 
+            unit_size = hyperparams['units']#int(x_train.shape[1] / 2)
+            dropout_rate = hyperparams['dropout_rate']
+            regularize = hyperparams['l2_regularizer']
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(inputs)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+            # shared_hidden_layer = Dense(unit_size, activation='relu',kernel_regularizer=l2(regularize))(shared_hidden_layer)
+            # shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
+            # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
+
+            # Task-specific output layers
+            output_layers = []
+            for i in range(x_train.shape[1]):
+                output_layer = Dense(1, activation='tanh', name=f'target_{i+1}')(shared_hidden_layer)
+                output_layers.append(output_layer)
+
+            # Create the multi-task learning model
+            self.model_feature_regress_model = Model(inputs=inputs, outputs=output_layers)
+            if hyperparams['optimizer'] == 'adam':
+                optimizer = Adam(learning_rate=hyperparams['learning_rate'])
+            else:
+                optimizer = RMSprop(learning_rate=hyperparams['learning_rate'])
+            # Compile the model
+            self.model_feature_regress_model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['mse'])
+
+            #Summary
+            self.model_feature_regress_model.summary()
+            # lr_scheduler = LearningRateScheduler(step_decay)
+            early_stop = EarlyStopping(monitor='val_loss', patience=50, mode='min', verbose=1)
+            # Train the model
+            # tensorboard_callback = TensorBoard(log_dir="./logs")
+            # y_train_array = y_train.values
+            history = self.model_feature_regress_model.fit(x_train, 
+                      y_train, 
+                      epochs=500, 
+                      batch_size=128, 
+                      validation_data=(x_test,y_test), 
+                      verbose=2,
+                      callbacks=[early_stop])
+            self.model_feature_regress_model.save('feature_deep_learning_mlb_regress_runs.h5')
+            plt.figure(figsize=(15,15))
+            save_each_label_error = []
+            for i in range(1,x_train.shape[1]+1):
+                col_name = f"val_target_{i}_mse"
+                plt.plot(history.history[col_name],color='grey',alpha=0.4) #,label=col_name
+                save_each_label_error.append(history.history[col_name])
+            # Convert the list of lists into a NumPy array
+            data_array = np.array(save_each_label_error)
+            # Calculate the mean at each sample
+            mean_at_each_sample = np.median(data_array, axis=0)
+            final_mse_dnn_regress = mean_at_each_sample[-1]
+            print("Final MSE:", final_mse_dnn_regress)
+            plt.plot(mean_at_each_sample,linewidth=4,color='black',label='mean of all error')
+            plt.legend()
+            plt.savefig('Multi_Task_learning_output_regress.png',dpi=350)
+            plt.close()
         
         if not exists('feature_xgb_model.pkl'):
             param_grid = {
@@ -588,6 +818,7 @@ class mlbDeep():
                 rf_model = load(file)
         with open('feature_linear_regression.pkl', 'rb') as file:
                 lin_model = load(file)
+        lstm_model = keras.models.load_model('feature_LSTM.h5')
         while True:
             try:
                 print(f'ALL TEAMS: {sorted(self.teams_abv)}')
@@ -722,6 +953,9 @@ class mlbDeep():
                 next_game_features_dnn_2 = feature_regress_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
                 lin_features_1 = lin_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
                 lin_features_2 = lin_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
+                next_game_features_lstm_1 = lstm_model.predict(forecast_team_1.to_numpy().reshape(-1, 1, 50))
+                next_game_features_lstm_2 = lstm_model.predict(forecast_team_2.to_numpy().reshape(-1, 1, 50))
+
                 #reshape DNN
                 dnn_list_1 = []
                 for val in next_game_features_dnn_1:
@@ -745,6 +979,8 @@ class mlbDeep():
                 prediction_median_dnn_2 = self.model.predict(dnn_list_2)
                 prediction_median_lin_1 = self.model.predict(lin_features_1)
                 prediction_median_lin_2 = self.model.predict(lin_features_2)
+                prediction_lstm_1 = self.model.predict(next_game_features_lstm_1)
+                prediction_lstm_2 = self.model.predict(next_game_features_lstm_2)
                 # next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
                 # print(next_game_features)
                 #predict
@@ -774,6 +1010,14 @@ class mlbDeep():
                     result_median_dnn_2 = 1
                 else:
                     result_median_dnn_2 = 0
+                if prediction_lstm_1[0][0] > 0.5:
+                    resultl_lstm_1 = 1
+                else:
+                    resultl_lstm_1 = 0
+                if prediction_lstm_2[0][0] > 0.5:
+                    resultl_lstm_2 = 1
+                else:
+                    resultl_lstm_2 = 0
 
                 # ensemble_1 = result_median_xgb_1 + result_median_rf_1 + result_median_dnn_1# + result_median_mlp + result_median_dt
                 # ensemble_2 = result_median_xgb_2 + result_median_rf_2 + result_median_dnn_2
@@ -841,6 +1085,8 @@ class mlbDeep():
                     print(Fore.GREEN + Style.BRIGHT + f'{self.team_2} Predicted Winning Probability: {round(prediction_median_xgb_2[0][0]*100,2)}% XGB, {round(prediction_median_rf_2[0][0]*100,2)}% RF, {round(prediction_median_dnn_2[0][0]*100,2)}% DNN' + Style.RESET_ALL)
                 print(f'{self.team_1} Predicted Winning Probability: {round(prediction_median_lin_1[0][0]*100,2)}% LinRegress')
                 print(f'{self.team_2} Predicted Winning Probability: {round(prediction_median_lin_2[0][0]*100,2)}% LinRegress')
+                print(f'{self.team_1} Predicted Winning Probability: {round(prediction_lstm_1[0][0]*100,2)}% LSTM')
+                print(f'{self.team_2} Predicted Winning Probability: {round(prediction_lstm_1[0][0]*100,2)}% LSTM')
                 print('====================================')
                 if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
                     print('Game will be close.')
@@ -895,15 +1141,16 @@ class mlbDeep():
                 df_inst[col] = df_inst[col].astype(float)
 
             df_inst.dropna(inplace=True)
-            game_result_series = df_inst['game_result']
-            df_inst.drop(columns=self.drop_cols_manual,inplace=True)
             #Actual Regressor
             game_result_series_runs = df_inst['RS'].astype(int)
             df_inst_runs = df_inst.drop(columns=['RS'])
+            df_inst_runs.drop(columns=self.drop_cols_manual,inplace=True)
             per_team_best_rolling_vals_runs = []
             per_team_best_rolling_vals_runs_key = []
 
             #Actual Classifier
+            game_result_series = df_inst['game_result']
+            df_inst.drop(columns=self.drop_cols_manual,inplace=True)
             per_team_best_rolling_vals = []
             per_team_best_rolling_vals_mean = []
             
@@ -1079,6 +1326,8 @@ class mlbDeep():
     def test_each_team_forecast(self):
         model = keras.models.load_model('deep_learning_mlb_class_test.h5')
         feature_regress_model = keras.models.load_model('feature_deep_learning_mlb_regress_test.h5',custom_objects={'mape_tf': mape_tf})
+        feature_regress_runs = keras.models.load_model('feature_deep_learning_mlb_regress_runs.h5')
+        lstm_model = keras.models.load_model('feature_LSTM.h5')
         with open('feature_xgb_model.pkl', 'rb') as file:
                 xgb_model = load(file)
         with open('feature_random_forest_model.pkl', 'rb') as file:
@@ -1093,6 +1342,8 @@ class mlbDeep():
         rf_out = 0
         xgb_out = 0 
         count_teams = 1
+        mape_total = []
+        lstm_out = 0
         for abv in tqdm(sorted(self.teams_abv)):
         #     # try:
             print() #tqdm things
@@ -1101,20 +1352,41 @@ class mlbDeep():
             for col in df_inst.columns:
                 df_inst[col].replace('', np.nan, inplace=True)
                 df_inst[col] = df_inst[col].astype(float)
-
-            #Actual
             df_inst.dropna(inplace=True)
+            #Actual - Regressor 
+            game_result_series_runs = df_inst['RS'].astype(int)
+            df_inst_runs = df_inst.drop(columns=['RS'])
+            df_inst_runs.drop(columns=self.drop_cols_manual,inplace=True)
+            #Actual - Classifier
             game_result_series = df_inst['game_result']
             df_inst.drop(columns=self.drop_cols_manual,inplace=True)
 
-        #     #use ARIMA to estimate the next game values
+            #get forecast
             _, df_forecast_second = self.forecast_features(df_inst)
             ground_truth = game_result_series.iloc[-1]
+
+            #Regression runs
+            ground_truth_runs = game_result_series_runs.iloc[-1]
+            _, df_forecast_second_runs = self.forecast_feature_regress(df_inst_runs)
+
+            feature_data_regress = df_forecast_second_runs.to_numpy().reshape(1, -1)
+            next_game_features_dnn_runs = feature_regress_runs.predict(feature_data_regress)
+            # print(next_game_features_dnn_runs)
+
+            dnn_list_runs = []
+            for val in next_game_features_dnn_runs:
+                dnn_list_runs.append(val[0][0])
+            dnn_list_runs = np.array(dnn_list_runs)
+            dnn_list_runs = np.reshape(dnn_list_runs, (1,len(dnn_list_runs)))
+            prediction_runs = self.model_regress.predict(dnn_list_runs)
+            mape_total.append(abs(ground_truth_runs - prediction_runs))
+            
 
             next_game_features_xgb = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             next_game_features_rf = rf_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             next_game_features_dnn = feature_regress_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             next_game_features_lin = lin_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
+            next_game_features_lstm = lstm_model.predict(df_forecast_second.to_numpy().reshape(-1, 1, 50))
 
             dnn_list = []
             for val in next_game_features_dnn:
@@ -1126,6 +1398,7 @@ class mlbDeep():
             prediction_median_rf = model.predict(next_game_features_rf)
             prediction_median_dnn = model.predict(dnn_list)
             prediction_median_lin = model.predict(next_game_features_lin)
+            prediction_lstm = model.predict(next_game_features_lstm)
             # next_game_features = xgb_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             # print(next_game_features)
             #predict
@@ -1147,6 +1420,10 @@ class mlbDeep():
                 result_median_lin = 1
             else:
                 result_median_lin = 0
+            if prediction_lstm[0][0] > 0.5:
+                result_lstm = 1
+            else:
+                result_lstm = 0
             # if int(ground_truth) == result_median:
             #     range_median = 1
             # else:
@@ -1172,6 +1449,8 @@ class mlbDeep():
                 rf_out += 1
             if int(ground_truth) == result_median_xgb:
                 xgb_out += 1
+            if int(ground_truth) == result_lstm:
+                lstm_out += 1
             print('=======================================')
             print(f'Prediction: {result_game} vs. Actual: {int(ground_truth)}')
             print('=======================================')
@@ -1180,21 +1459,29 @@ class mlbDeep():
             print(f'LinRegress Accuracy out of {count_teams} teams: {lin_out / count_teams}')
             print(f'RandomForest Accuracy out of {count_teams} teams: {rf_out / count_teams}')
             print(f'XGB Accuracy out of {count_teams} teams: {xgb_out / count_teams}')
+            print(f'LSTM Accuracy out of {count_teams} teams: {lstm_out / count_teams}')
+            print('=======================================')
+            print(f'Points actual {ground_truth_runs} vs prediction {prediction_runs} ')
+            print(f'MAPE over all games: {np.mean(mape_total)}%')
             print('=======================================')
             count_teams += 1
+            del df_inst
+            del df_inst_runs
     
     def forecast_features(self,game_data):
-        #standardize and PCA
+        #standardize and FA
         X_std_1 = self.scaler.transform(game_data)
         X_pca_1 = self.pca.transform(X_std_1)
         team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
-        # # Train a VAR model
-        # model = VAR(team_1_df2023)
-        # model_fit = model.fit()
-        # # Forecast feature values for the next game
-        # next_game_features = model_fit.forecast(model_fit.endog, steps=1)
-        # next_game_features = next_game_features[0] 
-        # team_df_forecast = DataFrame(np.array(next_game_features).reshape(1,self.pca.n_components_), columns=[f'PC{i}' for i in range(1, self.pca.n_components_+1)])
+        team_df_forecast = team_1_df2023.iloc[-1:] #last game
+        team_df_forecast_second = team_1_df2023.iloc[-2] #2nd to last game
+        return team_df_forecast, team_df_forecast_second
+    
+    def forecast_feature_regress(self,game_data):
+        #standardize and FA - regression
+        X_std_1 = self.scaler_regress.transform(game_data)
+        X_pca_1 = self.pca_regress.transform(X_std_1)
+        team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, len(self.pca_regress.components_)+1)])#pd.DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, self.regress_pca.n_components_+1)])
         team_df_forecast = team_1_df2023.iloc[-1:] #last game
         team_df_forecast_second = team_1_df2023.iloc[-2] #2nd to last game
         return team_df_forecast, team_df_forecast_second
