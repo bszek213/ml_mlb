@@ -232,7 +232,7 @@ def create_lstm_model(units=50, dropout=0.2):
     model.add(LSTM(units=units, input_shape=(1, NUM_FEATURES),return_sequences=True))
     model.add(Dropout(dropout))
     model.add(LSTM(units=units))
-    model.add(Dense(units=50))
+    model.add(Dense(units=NUM_FEATURES))
     model.compile(optimizer='adam', loss='mean_squared_error')
     return model
 
@@ -515,7 +515,10 @@ class mlbDeep():
                 # Add more hyperparameters to tune
             }
             # Create KerasRegressor model
-            lstm_model = KerasRegressor(build_fn=create_lstm_model, epochs=100, batch_size=128, verbose=2)
+            lstm_model = KerasRegressor(build_fn=create_lstm_model, 
+                                        epochs=50, 
+                                        batch_size=256, 
+                                        verbose=2)
 
             # Use Grid Search to find best hyperparameters
             grid = GridSearchCV(estimator=lstm_model, param_grid=param_grid, cv=3)
@@ -523,8 +526,7 @@ class mlbDeep():
             best_hyperparams = grid_result.best_params_
             best_model = grid_result.best_estimator_.model
             best_score = grid_result.best_score_
-            print(best_model)
-            print(f'Best hyperparams: {best_hyperparams}')
+            print(f'Best hyperparams: {best_hyperparams}') #Best hyperparams: {'dropout': 0.4, 'units': 50}
             print(f'Lowest MSE: {best_score}')
             best_model.save('feature_LSTM.h5')
             # Define your LSTM model
