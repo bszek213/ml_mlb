@@ -48,6 +48,7 @@ from sys import exit
 from keras.optimizers import Adam, RMSprop
 import keras_tuner as kt
 from kerastuner.tuners import RandomSearch
+from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
 warnings.filterwarnings("ignore")
 
 """
@@ -61,7 +62,7 @@ What I have learned:
 VAR=50% acc, XGBoost=50% acc, RandomForest=63% acc, LinearRegression=53% acc, MLP=50% acc, KNeighestNeighbors= 57% acc
 RidgeCV= 50% acc, Ridge= 50% acc, DecisionTree= 60% acc
 """
-
+NUM_FEATURES = 45
 def mape(y_true, y_pred):
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
@@ -93,7 +94,7 @@ def create_model_classifier(hp):
     # l1_regularizer = hp.Float('l1_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
     l2_regularizer = hp.Float('l2_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
 
-    inputs = Input(shape=(50,))
+    inputs = Input(shape=(NUM_FEATURES,))
 
     shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(inputs)
     shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(shared_hidden_layer)
@@ -133,7 +134,7 @@ def create_model_classifier(hp):
     # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
 
     output_layers = []
-    for i in range(50):
+    for i in range(NUM_FEATURES):
         output_layer = Dense(1, activation='tanh', name=f'target_{i+1}')(shared_hidden_layer)
         output_layers.append(output_layer)
 
@@ -154,7 +155,7 @@ def create_model_regressor(hp):
     # l1_regularizer = hp.Float('l1_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
     l2_regularizer = hp.Float('l2_regularizer', min_value=1e-6, max_value=1e-2, sampling='log')
 
-    inputs = Input(shape=(50,))
+    inputs = Input(shape=(NUM_FEATURES,))
 
     shared_hidden_layer = Dense(unit_size, activation='tanh',kernel_regularizer=l2(l2_regularizer))(inputs)
     shared_hidden_layer = BatchNormalization()(shared_hidden_layer)
@@ -196,7 +197,7 @@ def create_model_regressor(hp):
     # shared_hidden_layer = Dropout(dropout_rate)(shared_hidden_layer)
 
     output_layers = []
-    for i in range(50):
+    for i in range(NUM_FEATURES):
         output_layer = Dense(1, activation='tanh', name=f'target_{i+1}')(shared_hidden_layer)
         output_layers.append(output_layer)
 
@@ -226,6 +227,15 @@ def create_sequences(x_data,sequence_length):
 
     return x_lstm, y_lstm
 
+def create_lstm_model(units=50, dropout=0.2):
+    model = Sequential()
+    model.add(LSTM(units=units, input_shape=(1, NUM_FEATURES),return_sequences=True))
+    model.add(Dropout(dropout))
+    model.add(LSTM(units=units))
+    model.add(Dense(units=50))
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    return model
+
 class mlbDeep():
     def __init__(self):
         print('instantiate class mlbDeep')
@@ -235,6 +245,7 @@ class mlbDeep():
                      "PHI","PIT","SDP","SFG","SEA","STL","TBR","TEX","TOR","WSN"]
         # if exists(join(getcwd(),'randomForestModelTuned.joblib')):
         #     self.RandForRegressor=joblib.load("./randomForestModelTuned.joblib")
+        self.num_features = 45 
     def get_teams(self):
         year_list_find = []
         year_list = np.arange(2010,2024,1).tolist()
@@ -341,7 +352,7 @@ class mlbDeep():
         X_std_regress = self.scaler_regress.fit_transform(self.x_regress)
         #PCA data down to 95% explained variance
         print(f'number of features: {len(self.x.columns)}')
-        self.manual_components = len(self.x.columns) - 2 #50 features currently.  35
+        self.manual_components = self.num_features# len(self.x.columns) - 2 #50 features currently.  35
         self.pca = FactorAnalysis(n_components=self.manual_components)
         self.pca_regress = FactorAnalysis(n_components=self.manual_components)
         # self.pca = PCA(n_components=0.95)
@@ -496,18 +507,38 @@ class mlbDeep():
             # print('====')
             # input()
             x_train_lstm, x_val_lstm, y_train_lstm, y_val_lstm = train_test_split(x_lstm, y_lstm, test_size=0.2, random_state=42)
+            #Tune LSTM
+            # Define parameter grid for Grid Search
+            param_grid = {
+                'units': [50, 100, 150, 200],
+                'dropout': [0.2, 0.4, 0.1],
+                # Add more hyperparameters to tune
+            }
+            # Create KerasRegressor model
+            lstm_model = KerasRegressor(build_fn=create_lstm_model, epochs=100, batch_size=128, verbose=2)
+
+            # Use Grid Search to find best hyperparameters
+            grid = GridSearchCV(estimator=lstm_model, param_grid=param_grid, cv=3)
+            grid_result = grid.fit(x_train_lstm, y_train_lstm, validation_data=(x_val_lstm, y_val_lstm))      
+            best_hyperparams = grid_result.best_params_
+            best_model = grid_result.best_estimator_.model
+            best_score = grid_result.best_score_
+            print(best_model)
+            print(f'Best hyperparams: {best_hyperparams}')
+            print(f'Lowest MSE: {best_score}')
+            best_model.save('feature_LSTM.h5')
             # Define your LSTM model
-            model = Sequential()
-            model.add(LSTM(units=50, input_shape=(1, 50), return_sequences=True))  # Input shape excludes the last row in each sequence
-            model.add(LSTM(units=50,return_sequences=False))
-            model.add(Dense(units=50))  # Output layer
+            # model = Sequential()
+            # model.add(LSTM(units=50, input_shape=(1, 50), return_sequences=True))  # Input shape excludes the last row in each sequence
+            # model.add(LSTM(units=50,return_sequences=False))
+            # model.add(Dense(units=50))  # Output layer
 
-            # Compile the model
-            model.compile(optimizer='adam', loss='mean_squared_error')
+            # # Compile the model
+            # model.compile(optimizer='adam', loss='mean_squared_error')
 
-            # Train the model using your formatted sequences
-            model.fit(x_train_lstm, y_train_lstm, validation_data=(x_val_lstm,y_val_lstm), epochs=100, batch_size=128, verbose=2)
-            model.save('feature_LSTM.h5')
+            # # Train the model using your formatted sequences
+            # model.fit(x_train_lstm, y_train_lstm, validation_data=(x_val_lstm,y_val_lstm), epochs=100, batch_size=128, verbose=2)
+            # model.save('feature_LSTM.h5')
         #linear regression
         if not exists('feature_linear_regression.pkl'):
             lin_model = LinearRegression().fit(x_train,y_train)
@@ -886,17 +917,22 @@ class mlbDeep():
                     best_values = yaml.safe_load(file)
                 for ma in tqdm(ma_range):
                     # if median_bool == True:
-                    team_1_df2023_roll = team_1_df2023.rolling(int(best_values[self.team_1])).median()
-                    team_2_df2023_roll = team_2_df2023.rolling(int(best_values[self.team_2])).median()
-                    team_1_df2023_roll = team_1_df2023_roll.iloc[-1:]
-                    team_2_df2023_roll = team_2_df2023_roll.iloc[-1:]
+                    # team_1_df2023_roll = team_1_df2023.rolling(int(best_values[self.team_1])).median()
+                    # team_2_df2023_roll = team_2_df2023.rolling(int(best_values[self.team_2])).median()
+                    # team_1_df2023_roll = team_1_df2023_roll.iloc[-1:]
+                    # team_2_df2023_roll = team_2_df2023_roll.iloc[-1:]
 
-                    X_std_1 = self.scaler.transform(team_1_df2023_roll)
-                    X_std_2 = self.scaler.transform(team_2_df2023_roll) 
+                    X_std_1 = self.scaler.transform(team_1_df2023)
+                    X_std_2 = self.scaler.transform(team_2_df2023) 
                     X_pca_1 = self.pca.transform(X_std_1)
                     X_pca_2 = self.pca.transform(X_std_2)
                     data1_mean = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
                     data2_mean = DataFrame(X_pca_2, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
+
+                    team_1_df2023_roll = data1_mean.rolling(int(best_values[self.team_1])).median()
+                    team_2_df2023_roll = data1_mean.rolling(int(best_values[self.team_2])).median()
+                    data1_mean = team_1_df2023_roll.iloc[-1:]
+                    data2_mean = team_2_df2023_roll.iloc[-1:]
                     # print(data1_mean)
                     #regress
                     data1_mean_regress = team_1_df2023_regress.rolling(int(best_values[self.team_1])).median()
@@ -953,8 +989,8 @@ class mlbDeep():
                 next_game_features_dnn_2 = feature_regress_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
                 lin_features_1 = lin_model.predict(forecast_team_1.to_numpy().reshape(1, -1))
                 lin_features_2 = lin_model.predict(forecast_team_2.to_numpy().reshape(1, -1))
-                next_game_features_lstm_1 = lstm_model.predict(forecast_team_1.to_numpy().reshape(-1, 1, 50))
-                next_game_features_lstm_2 = lstm_model.predict(forecast_team_2.to_numpy().reshape(-1, 1, 50))
+                next_game_features_lstm_1 = lstm_model.predict(forecast_team_1.to_numpy().reshape(-1, 1, self.num_features))
+                next_game_features_lstm_2 = lstm_model.predict(forecast_team_2.to_numpy().reshape(-1, 1, self.num_features))
 
                 #reshape DNN
                 dnn_list_1 = []
@@ -1163,22 +1199,24 @@ class mlbDeep():
                 dict_range_median = {}
                 dict_range_mean = {}
                 dict_range_runs= {}
+                #transform
+                X_std_1 = self.scaler.transform(df_inst)
+                X_std_1_mean = self.scaler.transform(df_inst)
+                X_pca_1 = self.pca.transform(X_std_1)
+                X_pca_1_mean = self.pca.transform(X_std_1_mean)
+                team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
+                team_1_df2023_mean = DataFrame(X_pca_1_mean, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
                 for roll_val in range_data:
-                    data1_median = df_inst.iloc[0:game].rolling(roll_val).median()
-                    # data1_median.loc[data1_median.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
-                    data1_mean = df_inst.iloc[0:game].ewm(span=roll_val,min_periods=roll_val-1).mean()
-                    # data1_mean.loc[data1_mean.index[-1],'win_loss_streak'] = df_inst['win_loss_streak'].iloc[-1]
+                    team_1_df2023 = team_1_df2023.iloc[0:game].rolling(roll_val).median()
+                    team_1_df2023_mean = team_1_df2023_mean.iloc[0:game].ewm(span=roll_val,min_periods=roll_val-1).mean()
                     data_runs = df_inst_runs.iloc[0:game].rolling(roll_val).median()
-                    # print(data1_median)
-                    # print('==============')
-                    # print(data1_mean)
                     #apply standardization and PCA - Classifier 
-                    X_std_1 = self.scaler.transform(data1_median.iloc[-1:])
-                    X_std_1_mean = self.scaler.transform(data1_mean.iloc[-1:])
-                    X_pca_1 = self.pca.transform(X_std_1)
-                    X_pca_1_mean = self.pca.transform(X_std_1_mean)
-                    team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
-                    team_1_df2023_mean = DataFrame(X_pca_1_mean, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
+                    # X_std_1 = self.scaler.transform(data1_median.iloc[-1:])
+                    # X_std_1_mean = self.scaler.transform(data1_mean.iloc[-1:])
+                    # X_pca_1 = self.pca.transform(X_std_1)
+                    # X_pca_1_mean = self.pca.transform(X_std_1_mean)
+                    # team_1_df2023 = DataFrame(X_pca_1, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
+                    # team_1_df2023_mean = DataFrame(X_pca_1_mean, columns=[f'PC{i}' for i in range(1, len(self.pca.components_)+1)])
                     prediction_median = model.predict(team_1_df2023.iloc[-1:])
                     prediction_mean = model.predict(team_1_df2023_mean.iloc[-1:])
 
@@ -1386,7 +1424,7 @@ class mlbDeep():
             next_game_features_rf = rf_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             next_game_features_dnn = feature_regress_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
             next_game_features_lin = lin_model.predict(df_forecast_second.to_numpy().reshape(1, -1))
-            next_game_features_lstm = lstm_model.predict(df_forecast_second.to_numpy().reshape(-1, 1, 50))
+            next_game_features_lstm = lstm_model.predict(df_forecast_second.to_numpy().reshape(-1, 1, self.num_features))
 
             dnn_list = []
             for val in next_game_features_dnn:
