@@ -1124,7 +1124,7 @@ class mlbDeep():
                 print(f'{self.team_1} Predicted Winning Probability: {round(prediction_median_lin_1[0][0]*100,2)}% LinRegress')
                 print(f'{self.team_2} Predicted Winning Probability: {round(prediction_median_lin_2[0][0]*100,2)}% LinRegress')
                 print(f'{self.team_1} Predicted Winning Probability: {round(prediction_lstm_1[0][0]*100,2)}% LSTM')
-                print(f'{self.team_2} Predicted Winning Probability: {round(prediction_lstm_1[0][0]*100,2)}% LSTM')
+                print(f'{self.team_2} Predicted Winning Probability: {round(prediction_lstm_2[0][0]*100,2)}% LSTM')
                 print('====================================')
                 if abs(sum(team_1_pred) - sum(team_2_pred)) <= 10: #arbitrary
                     print('Game will be close.')
